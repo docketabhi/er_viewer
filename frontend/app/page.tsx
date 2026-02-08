@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { MonacoEditor } from '@/components/Editor';
+import { MermaidPreview } from '@/components/Preview';
 
 const DEFAULT_MERMAID_SOURCE = `erDiagram
     CUSTOMER ||--o{ ORDER : places
@@ -26,18 +27,32 @@ const DEFAULT_MERMAID_SOURCE = `erDiagram
 
 export default function Home() {
   const [mermaidSource, setMermaidSource] = useState(DEFAULT_MERMAID_SOURCE);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  const handleRenderSuccess = useCallback(() => {
+    setRenderError(null);
+  }, []);
+
+  const handleRenderError = useCallback((error: Error) => {
+    setRenderError(error.message);
+  }, []);
 
   return (
     <main className="flex min-h-screen flex-col">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h1 className="text-xl font-bold">ER Viewer</h1>
-        <p className="text-sm text-muted-foreground">
-          Mermaid diagramming with nested ER blocks
-        </p>
+        <div className="flex items-center gap-4">
+          {renderError && (
+            <span className="text-xs text-destructive">Syntax error</span>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Mermaid diagramming with nested ER blocks
+          </p>
+        </div>
       </header>
 
-      {/* Main content area - Editor */}
+      {/* Main content area - Editor and Preview */}
       <div className="flex-1 flex">
         {/* Editor panel */}
         <div className="flex-1 flex flex-col border-r border-border">
@@ -53,18 +68,18 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Preview panel placeholder */}
+        {/* Preview panel with Mermaid rendering */}
         <div className="flex-1 flex flex-col">
           <div className="px-4 py-2 border-b border-border bg-muted/50">
             <span className="text-sm font-medium">Preview</span>
           </div>
-          <div className="flex-1 flex items-center justify-center bg-background">
-            <div className="text-muted-foreground text-sm p-4 text-center">
-              <p className="mb-2">Preview will render here</p>
-              <p className="text-xs opacity-75">
-                (Mermaid preview component coming in next subtask)
-              </p>
-            </div>
+          <div className="flex-1">
+            <MermaidPreview
+              source={mermaidSource}
+              isDarkMode={true}
+              onRenderSuccess={handleRenderSuccess}
+              onRenderError={handleRenderError}
+            />
           </div>
         </div>
       </div>

@@ -1,0 +1,258 @@
+'use client';
+
+import { useEffect, useRef, useState, useCallback, useId } from 'react';
+import {
+  type MermaidTheme,
+  createMermaidConfig,
+  getThemeForMode,
+} from '@/lib/mermaid/config';
+
+/**
+ * Props for the MermaidPreview component.
+ */
+export interface MermaidPreviewProps {
+  /** The Mermaid source code to render */
+  source: string;
+  /** Optional Mermaid theme override */
+  theme?: MermaidTheme;
+  /** Whether the app is in dark mode (used to auto-select theme) */
+  isDarkMode?: boolean;
+  /** Callback fired when rendering completes successfully */
+  onRenderSuccess?: (svg: string) => void;
+  /** Callback fired when rendering fails */
+  onRenderError?: (error: Error) => void;
+  /** Additional CSS class for the container */
+  className?: string;
+}
+
+/**
+ * Render state for tracking the component's status.
+ */
+interface RenderState {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  svg: string | null;
+  error: Error | null;
+}
+
+/**
+ * MermaidPreview component renders Mermaid diagrams as SVG.
+ *
+ * Uses dynamic import of Mermaid.js to ensure it only loads in the browser,
+ * preventing SSR issues. The component uses mermaid.render() API (not the
+ * deprecated mermaid.init()) for rendering.
+ *
+ * @example
+ * ```tsx
+ * <MermaidPreview
+ *   source={`erDiagram
+ *     CUSTOMER ||--o{ ORDER : places
+ *   `}
+ *   theme="dark"
+ *   onRenderError={(error) => console.error(error)}
+ * />
+ * ```
+ */
+export function MermaidPreview({
+  source,
+  theme,
+  isDarkMode = false,
+  onRenderSuccess,
+  onRenderError,
+  className = '',
+}: MermaidPreviewProps) {
+  // Generate a unique ID for this component instance
+  const componentId = useId();
+  const containerId = `mermaid-preview-${componentId.replace(/:/g, '-')}`;
+
+  // Refs for DOM access
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mermaidRef = useRef<typeof import('mermaid') | null>(null);
+
+  // Render state
+  const [renderState, setRenderState] = useState<RenderState>({
+    status: 'idle',
+    svg: null,
+    error: null,
+  });
+
+  // Track if component is mounted
+  const isMountedRef = useRef(true);
+
+  // Determine the effective theme
+  const effectiveTheme = theme ?? getThemeForMode(isDarkMode);
+
+  /**
+   * Initialize Mermaid with configuration.
+   * Only runs once when mermaid module is first loaded.
+   */
+  const initializeMermaid = useCallback(
+    async (mermaid: typeof import('mermaid').default) => {
+      const config = createMermaidConfig({ theme: effectiveTheme });
+      mermaid.initialize(config);
+    },
+    [effectiveTheme]
+  );
+
+  /**
+   * Render the Mermaid diagram from source.
+   * Uses mermaid.render() API for rendering.
+   */
+  const renderDiagram = useCallback(async () => {
+    // Skip if no source or already loading
+    if (!source.trim()) {
+      setRenderState({
+        status: 'idle',
+        svg: null,
+        error: null,
+      });
+      return;
+    }
+
+    setRenderState((prev) => ({
+      ...prev,
+      status: 'loading',
+      error: null,
+    }));
+
+    try {
+      // Dynamically import mermaid to avoid SSR issues
+      if (!mermaidRef.current) {
+        mermaidRef.current = await import('mermaid');
+      }
+
+      const mermaid = mermaidRef.current.default;
+
+      // Re-initialize with current theme settings
+      await initializeMermaid(mermaid);
+
+      // Generate a unique ID for this render call
+      const renderId = `mermaid-render-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+      // Use mermaid.render() API (not deprecated init())
+      const { svg, bindFunctions } = await mermaid.render(renderId, source);
+
+      // Check if component is still mounted
+      if (!isMountedRef.current) return;
+
+      // Update state with rendered SVG
+      setRenderState({
+        status: 'success',
+        svg,
+        error: null,
+      });
+
+      // Call success callback
+      onRenderSuccess?.(svg);
+
+      // If container exists, insert SVG and bind any interactive functions
+      if (containerRef.current) {
+        containerRef.current.innerHTML = svg;
+        // Mermaid's bindFunctions attaches click handlers for interactive diagrams
+        bindFunctions?.(containerRef.current);
+      }
+    } catch (err) {
+      // Check if component is still mounted
+      if (!isMountedRef.current) return;
+
+      const error = err instanceof Error ? err : new Error(String(err));
+
+      setRenderState({
+        status: 'error',
+        svg: null,
+        error,
+      });
+
+      // Call error callback
+      onRenderError?.(error);
+    }
+  }, [source, initializeMermaid, onRenderSuccess, onRenderError]);
+
+  // Track mount state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Re-render when source or theme changes
+  useEffect(() => {
+    renderDiagram();
+  }, [renderDiagram]);
+
+  // Render loading state
+  if (renderState.status === 'loading') {
+    return (
+      <div
+        className={`flex items-center justify-center h-full bg-background ${className}`}
+      >
+        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+          <div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Rendering diagram...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Render error state
+  if (renderState.status === 'error') {
+    return (
+      <div className={`flex items-center justify-center h-full p-4 ${className}`}>
+        <div className="max-w-md p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-5 h-5 text-destructive">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-medium text-destructive">
+                Diagram Syntax Error
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground break-words">
+                {renderState.error?.message || 'Failed to render diagram'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Render idle state (no source)
+  if (renderState.status === 'idle' || !renderState.svg) {
+    return (
+      <div
+        className={`flex items-center justify-center h-full bg-background ${className}`}
+      >
+        <div className="text-muted-foreground text-sm text-center p-4">
+          <p>Enter a Mermaid diagram to see the preview</p>
+          <p className="text-xs mt-1 opacity-75">
+            Supported: erDiagram, flowchart, sequenceDiagram, and more
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render success state with SVG
+  return (
+    <div
+      id={containerId}
+      ref={containerRef}
+      className={`mermaid-preview flex items-center justify-center h-full p-4 overflow-auto bg-background ${className}`}
+      // Set SVG directly in case containerRef wasn't updated
+      dangerouslySetInnerHTML={{ __html: renderState.svg }}
+    />
+  );
+}
+
+export default MermaidPreview;
