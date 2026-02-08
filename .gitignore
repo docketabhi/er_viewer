@@ -14,8 +14,10 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python lib directories (not frontend/lib which is for the app)
+/lib/
 lib64/
+!/frontend/lib/
 parts/
 sdist/
 var/
@@ -205,3 +207,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Auto Claude data directory
+.auto-claude/

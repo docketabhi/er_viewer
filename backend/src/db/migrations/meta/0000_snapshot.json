@@ -1,0 +1,258 @@
+{
+  "id": "0000_initial_schema",
+  "prevId": "",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.diagrams": {
+      "name": "diagrams",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'erDiagram'"
+        },
+        "mermaid_source": {
+          "name": "mermaid_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "theme": {
+          "name": "theme",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'default'"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "diagrams_created_by_idx": {
+          "name": "diagrams_created_by_idx",
+          "columns": ["created_by"],
+          "isUnique": false
+        },
+        "diagrams_type_idx": {
+          "name": "diagrams_type_idx",
+          "columns": ["type"],
+          "isUnique": false
+        },
+        "diagrams_updated_at_idx": {
+          "name": "diagrams_updated_at_idx",
+          "columns": ["updated_at"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.diagram_versions": {
+      "name": "diagram_versions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "diagram_id": {
+          "name": "diagram_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mermaid_source": {
+          "name": "mermaid_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "version_label": {
+          "name": "version_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "diagram_versions_diagram_id_idx": {
+          "name": "diagram_versions_diagram_id_idx",
+          "columns": ["diagram_id"],
+          "isUnique": false
+        },
+        "diagram_versions_created_at_idx": {
+          "name": "diagram_versions_created_at_idx",
+          "columns": ["created_at"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "diagram_versions_diagram_id_diagrams_id_fk": {
+          "name": "diagram_versions_diagram_id_diagrams_id_fk",
+          "tableFrom": "diagram_versions",
+          "tableTo": "diagrams",
+          "columnsFrom": ["diagram_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "public.diagram_blocks": {
+      "name": "diagram_blocks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "parent_diagram_id": {
+          "name": "parent_diagram_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parent_entity_key": {
+          "name": "parent_entity_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "child_diagram_id": {
+          "name": "child_diagram_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "diagram_blocks_parent_diagram_id_idx": {
+          "name": "diagram_blocks_parent_diagram_id_idx",
+          "columns": ["parent_diagram_id"],
+          "isUnique": false
+        },
+        "diagram_blocks_child_diagram_id_idx": {
+          "name": "diagram_blocks_child_diagram_id_idx",
+          "columns": ["child_diagram_id"],
+          "isUnique": false
+        },
+        "diagram_blocks_parent_entity_unique_idx": {
+          "name": "diagram_blocks_parent_entity_unique_idx",
+          "columns": ["parent_diagram_id", "parent_entity_key"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "diagram_blocks_parent_diagram_id_diagrams_id_fk": {
+          "name": "diagram_blocks_parent_diagram_id_diagrams_id_fk",
+          "tableFrom": "diagram_blocks",
+          "tableTo": "diagrams",
+          "columnsFrom": ["parent_diagram_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "diagram_blocks_child_diagram_id_diagrams_id_fk": {
+          "name": "diagram_blocks_child_diagram_id_diagrams_id_fk",
+          "tableFrom": "diagram_blocks",
+          "tableTo": "diagrams",
+          "columnsFrom": ["child_diagram_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
