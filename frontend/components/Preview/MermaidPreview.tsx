@@ -7,6 +7,7 @@ import {
   getThemeForMode,
 } from '@/lib/mermaid/config';
 import { useDebounce } from '@/hooks/useDebounce';
+import { ErrorDisplay } from './ErrorDisplay';
 
 /** Default debounce delay for preview updates in milliseconds */
 const PREVIEW_DEBOUNCE_MS = 300;
@@ -202,36 +203,15 @@ export function MermaidPreview({
     );
   }
 
-  // Render error state
+  // Render error state using the ErrorDisplay component
   if (renderState.status === 'error') {
     return (
-      <div className={`flex items-center justify-center h-full p-4 ${className}`}>
-        <div className="max-w-md p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-5 h-5 text-destructive">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-medium text-destructive">
-                Diagram Syntax Error
-              </h3>
-              <p className="mt-1 text-xs text-muted-foreground break-words">
-                {renderState.error?.message || 'Failed to render diagram'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ErrorDisplay
+        error={renderState.error}
+        source={debouncedSource}
+        title="Diagram Syntax Error"
+        className={className}
+      />
     );
   }
 
