@@ -20,6 +20,7 @@ import { useDiagramNavigation, useContextMenu } from '@/hooks';
 import type { BlockDirective } from '@/lib/mermaid/types';
 import type { ProcessedSvg, EntityNodeInfo } from '@/lib/mermaid/svgProcessor';
 import type { MermaidTheme } from '@/lib/mermaid/config';
+import { generateContextualSkeleton } from '@/lib/diagram';
 
 /**
  * Default Mermaid source for the root diagram.
@@ -460,6 +461,9 @@ function DiagramViewer() {
     closeMenu: closeContextMenu,
   } = useContextMenu<ContextMenuTarget>();
 
+  // Selected entity state for command palette actions
+  const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
+
   // Use the navigation hook
   const {
     currentDiagram,
@@ -489,6 +493,117 @@ function DiagramViewer() {
       setDiagram(DEFAULT_ROOT_DIAGRAM);
     }
   }, [currentDiagram, setDiagram]);
+
+  /**
+   * Handle command palette 'Create Subdiagram from Selection' action.
+   * If an entity is selected/focused, creates a subdiagram for it.
+   * Otherwise, prompts user to select an entity first.
+   */
+  const handleCommandPaletteCreateSubdiagram = useCallback(() => {
+    // Check if we have a selected entity from context menu or other selection
+    if (selectedEntity) {
+      // Use the selected entity
+      const newDiagramId = `${selectedEntity.toLowerCase()}-details-${Date.now()}`;
+      const skeletonResult = generateContextualSkeleton(
+        selectedEntity,
+        currentSource,
+        {
+          relatedEntityCount: 3,
+          includeComments: true,
+          includeParentReference: true,
+        }
+      );
+
+      const blockDirective = `%%block: ${selectedEntity} -> diagramId=${newDiagramId} label="${skeletonResult.suggestedTitle}"`;
+      const newSource = currentSource + '\n' + blockDirective;
+      setSource(newSource);
+
+      // Dispatch event to notify about new diagram creation
+      window.dispatchEvent(
+        new CustomEvent('er-viewer:diagram-created', {
+          detail: {
+            diagram: {
+              id: newDiagramId,
+              title: skeletonResult.suggestedTitle,
+              source: skeletonResult.source,
+            },
+            parentEntityName: selectedEntity,
+            parentDiagramId: currentDiagram?.id,
+          },
+        })
+      );
+
+      // Clear selection
+      setSelectedEntity(null);
+      return;
+    }
+
+    // If no entity is selected, check if there are any entities without blocks
+    if (processedSvg && processedSvg.entityNodes.size > 0) {
+      // Find entities without blocks
+      const entitiesWithoutBlocks: string[] = [];
+      processedSvg.entityNodes.forEach((info, name) => {
+        if (!info.hasBlock) {
+          entitiesWithoutBlocks.push(name);
+        }
+      });
+
+      if (entitiesWithoutBlocks.length > 0) {
+        // Use the first available entity
+        const entityName = entitiesWithoutBlocks[0];
+        const newDiagramId = `${entityName.toLowerCase()}-details-${Date.now()}`;
+        const skeletonResult = generateContextualSkeleton(
+          entityName,
+          currentSource,
+          {
+            relatedEntityCount: 3,
+            includeComments: true,
+            includeParentReference: true,
+          }
+        );
+
+        const blockDirective = `%%block: ${entityName} -> diagramId=${newDiagramId} label="${skeletonResult.suggestedTitle}"`;
+        const newSource = currentSource + '\n' + blockDirective;
+        setSource(newSource);
+
+        // Dispatch event
+        window.dispatchEvent(
+          new CustomEvent('er-viewer:diagram-created', {
+            detail: {
+              diagram: {
+                id: newDiagramId,
+                title: skeletonResult.suggestedTitle,
+                source: skeletonResult.source,
+              },
+              parentEntityName: entityName,
+              parentDiagramId: currentDiagram?.id,
+            },
+          })
+        );
+      }
+    }
+  }, [selectedEntity, currentSource, currentDiagram, processedSvg, setSource]);
+
+  // Listen for command palette events
+  useEffect(() => {
+    const handleCreateSubdiagramEvent = () => {
+      handleCommandPaletteCreateSubdiagram();
+    };
+
+    const handleNavigateBackEvent = () => {
+      if (canGoBack) {
+        goBack();
+      }
+    };
+
+    window.addEventListener('er-viewer:create-subdiagram', handleCreateSubdiagramEvent);
+    window.addEventListener('er-viewer:navigate-back', handleNavigateBackEvent);
+
+    return () => {
+      window.removeEventListener('er-viewer:create-subdiagram', handleCreateSubdiagramEvent);
+      window.removeEventListener('er-viewer:navigate-back', handleNavigateBackEvent);
+    };
+  }, [handleCommandPaletteCreateSubdiagram, canGoBack, goBack]);
 
   /**
    * Handle successful render.
@@ -547,9 +662,21 @@ function DiagramViewer() {
   const handleEntityContextMenu = useCallback(
     (entityName: string, event: MouseEvent) => {
       const entityInfo = processedSvg?.entityNodes.get(entityName) ?? null;
+      // Set selected entity for command palette actions
+      setSelectedEntity(entityName);
       openContextMenu(event, { entityName, entityInfo });
     },
     [openContextMenu, processedSvg]
+  );
+
+  /**
+   * Handle entity click to select it for command palette actions.
+   */
+  const handleEntityClick = useCallback(
+    (entityName: string) => {
+      setSelectedEntity(entityName);
+    },
+    []
   );
 
   /**
@@ -570,23 +697,51 @@ function DiagramViewer() {
 
   /**
    * Handle "Create subdiagram" from context menu.
-   * Creates a new child diagram with a skeleton structure.
+   * Creates a new child diagram with an auto-generated skeleton structure.
    */
   const handleCreateSubdiagram = useCallback(
     (entityName: string) => {
       // Generate a new diagram ID
       const newDiagramId = `${entityName.toLowerCase()}-details-${Date.now()}`;
 
+      // Generate skeleton diagram for the child
+      const skeletonResult = generateContextualSkeleton(
+        entityName,
+        currentSource,
+        {
+          relatedEntityCount: 3,
+          includeComments: true,
+          includeParentReference: true,
+        }
+      );
+
       // Add block directive to current source
-      const blockDirective = `%%block: ${entityName} -> diagramId=${newDiagramId} label="${entityName} Details"`;
+      const blockDirective = `%%block: ${entityName} -> diagramId=${newDiagramId} label="${skeletonResult.suggestedTitle}"`;
       const newSource = currentSource + '\n' + blockDirective;
       setSource(newSource);
 
-      // In a real app, this would also create the child diagram in the database
-      // For now, we just add the directive
+      // Store the generated skeleton in mock diagrams
+      // In a real app, this would create the child diagram via API
+      const newChildDiagram: DiagramEntry = {
+        id: newDiagramId,
+        title: skeletonResult.suggestedTitle,
+        source: skeletonResult.source,
+      };
+
+      // Dispatch event to notify about new diagram creation
+      window.dispatchEvent(
+        new CustomEvent('er-viewer:diagram-created', {
+          detail: {
+            diagram: newChildDiagram,
+            parentEntityName: entityName,
+            parentDiagramId: currentDiagram?.id,
+          },
+        })
+      );
+
       closeContextMenu();
     },
-    [currentSource, setSource, closeContextMenu]
+    [currentSource, currentDiagram, setSource, closeContextMenu]
   );
 
   /**
