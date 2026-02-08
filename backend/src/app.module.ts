@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { DiagramsModule } from './modules/diagrams/diagrams.module';
 
 @Module({
   imports: [
@@ -10,8 +11,9 @@ import { AppService } from './app.service';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    // Diagram CRUD module
+    DiagramsModule,
     // Additional modules will be added here:
-    // - DiagramsModule (Phase 3)
     // - GatewaysModule (Phase 4)
   ],
   controllers: [AppController],
