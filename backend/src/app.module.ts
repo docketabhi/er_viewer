@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DiagramsModule } from './modules/diagrams/diagrams.module';
+import { GatewaysModule } from './gateways/gateways.module';
 
 @Module({
   imports: [
@@ -13,8 +14,8 @@ import { DiagramsModule } from './modules/diagrams/diagrams.module';
     }),
     // Diagram CRUD module
     DiagramsModule,
-    // Additional modules will be added here:
-    // - GatewaysModule (Phase 4)
+    // WebSocket gateways for real-time presence
+    GatewaysModule,
   ],
   controllers: [AppController],
   providers: [AppService],
