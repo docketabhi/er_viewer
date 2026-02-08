@@ -16,6 +16,10 @@ export interface CanvasControlsProps {
   onReset: () => void;
   /** Callback to fit content to container */
   onFitToContainer?: () => void;
+  /** Callback to toggle fullscreen mode */
+  onToggleFullscreen?: () => void;
+  /** Whether currently in fullscreen mode */
+  isFullscreen?: boolean;
   /** Minimum zoom scale for disabling zoom out button */
   minScale?: number;
   /** Maximum zoom scale for disabling zoom in button */
@@ -144,12 +148,47 @@ function FitIcon({ className }: { className?: string }) {
 }
 
 /**
+ * Fullscreen expand icon.
+ */
+function FullscreenIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3.5 2A1.5 1.5 0 002 3.5v3a.75.75 0 001.5 0V4.56l2.72 2.72a.75.75 0 101.06-1.06L4.56 3.5H6.5a.75.75 0 000-1.5h-3zM16.5 2h-3a.75.75 0 000 1.5h1.94l-2.72 2.72a.75.75 0 101.06 1.06l2.72-2.72V6.5a.75.75 0 001.5 0v-3A1.5 1.5 0 0016.5 2zM7.28 12.72a.75.75 0 00-1.06 0L3.5 15.44V13.5a.75.75 0 00-1.5 0v3A1.5 1.5 0 003.5 18h3a.75.75 0 000-1.5H4.56l2.72-2.72a.75.75 0 000-1.06zm5.44 0a.75.75 0 10-1.06 1.06l2.72 2.72H12.5a.75.75 0 000 1.5h3a1.5 1.5 0 001.5-1.5v-3a.75.75 0 00-1.5 0v1.94l-2.72-2.72z" />
+    </svg>
+  );
+}
+
+/**
+ * Fullscreen collapse/exit icon.
+ */
+function ExitFullscreenIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3.28 2.22a.75.75 0 00-1.06 1.06l2.72 2.72H3a.75.75 0 000 1.5h4a.75.75 0 00.75-.75V3a.75.75 0 00-1.5 0v1.94L3.28 2.22zM16.72 2.22a.75.75 0 00-1.06 0L12.94 5V3a.75.75 0 00-1.5 0v3.75c0 .414.336.75.75.75h4a.75.75 0 000-1.5h-1.94l2.72-2.72a.75.75 0 000-1.06zM3 12.5a.75.75 0 000 1.5h1.94l-2.72 2.72a.75.75 0 101.06 1.06l2.72-2.72V17a.75.75 0 001.5 0v-3.75a.75.75 0 00-.75-.75H3zm9.25 0a.75.75 0 00-.75.75V17a.75.75 0 001.5 0v-1.94l2.72 2.72a.75.75 0 101.06-1.06l-2.72-2.72H17a.75.75 0 000-1.5h-4z" />
+    </svg>
+  );
+}
+
+/**
  * CanvasControls component provides zoom and pan controls for the diagram preview.
  *
  * Features:
  * - Zoom in/out buttons
  * - Reset view button
  * - Optional fit-to-container button
+ * - Optional fullscreen toggle button
  * - Scale percentage display
  * - Keyboard accessible
  * - Configurable size and position
@@ -161,6 +200,9 @@ function FitIcon({ className }: { className?: string }) {
  *   onZoomIn={handleZoomIn}
  *   onZoomOut={handleZoomOut}
  *   onReset={handleReset}
+ *   onFitToContainer={handleFit}
+ *   onToggleFullscreen={handleFullscreen}
+ *   isFullscreen={false}
  *   position="bottom-right"
  *   showScale
  * />
@@ -172,6 +214,8 @@ export const CanvasControls = memo(function CanvasControls({
   onZoomOut,
   onReset,
   onFitToContainer,
+  onToggleFullscreen,
+  isFullscreen = false,
   minScale = 0.1,
   maxScale = 5,
   size = 'md',
@@ -320,6 +364,38 @@ export const CanvasControls = memo(function CanvasControls({
         >
           <FitIcon className={sizes.icon} />
         </button>
+      )}
+
+      {/* Fullscreen Toggle Button (optional) */}
+      {onToggleFullscreen && (
+        <>
+          {/* Separator before fullscreen */}
+          <div className="w-px h-4 bg-border mx-0.5" aria-hidden="true" />
+
+          <button
+            type="button"
+            onClick={onToggleFullscreen}
+            onKeyDown={(e) => handleKeyDown(e, onToggleFullscreen)}
+            className={`
+              ${sizes.button}
+              inline-flex items-center justify-center
+              rounded-md
+              text-muted-foreground
+              hover:text-foreground hover:bg-muted
+              focus:outline-none focus:ring-2 focus:ring-primary/50
+              transition-colors duration-150
+            `}
+            aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
+            aria-pressed={isFullscreen}
+          >
+            {isFullscreen ? (
+              <ExitFullscreenIcon className={sizes.icon} />
+            ) : (
+              <FullscreenIcon className={sizes.icon} />
+            )}
+          </button>
+        </>
       )}
     </div>
   );
