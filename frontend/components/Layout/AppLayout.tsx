@@ -95,6 +95,7 @@ function useResponsive() {
  * AppLayout component providing a responsive 3-panel layout.
  *
  * The layout consists of:
+ * - Header: Top bar with title, actions, and theme toggle (use TopBar component)
  * - Left panel: Collapsible sidebar for file tree, search, recent items
  * - Center panel: Main content area for editor and preview
  * - Right panel: Collapsible sidebar for docs, snippets, comments, history
@@ -108,8 +109,23 @@ function useResponsive() {
  *
  * @example
  * ```tsx
+ * import { TopBar } from '@/components/TopBar';
+ * import { LeftPanel } from '@/components/Panels/LeftPanel';
+ * import { RightPanel } from '@/components/Panels/RightPanel';
+ *
  * <AppLayout
- *   header={<TopBar />}
+ *   header={
+ *     <TopBar
+ *       title="My Diagram"
+ *       titleEditable
+ *       onTitleChange={(title) => setTitle(title)}
+ *       diagramId={diagramId}
+ *       isSaved={isSaved}
+ *       hasUnsavedChanges={hasChanges}
+ *       onExport={(format) => handleExport(format)}
+ *       presenceUsers={users}
+ *     />
+ *   }
  *   leftPanel={<LeftPanel />}
  *   centerPanel={<EditorPreview />}
  *   rightPanel={<RightPanel />}
@@ -203,7 +219,7 @@ export const AppLayout = memo(function AppLayout({
     >
       {/* Header */}
       {header && (
-        <header className="app-layout__header flex-shrink-0 border-b border-border z-10">
+        <header className="app-layout__header flex-shrink-0 z-10">
           {header}
         </header>
       )}
