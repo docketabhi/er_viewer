@@ -63,3 +63,54 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--foreground);
 }
+
+/* Resizable panel styles */
+.resizable-panel__handle {
+  position: relative;
+  touch-action: none;
+}
+
+.resizable-panel__handle:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.resizable-panel__handle:active {
+  background-color: var(--primary);
+}
+
+/* Prevent text selection during resize */
+.app-layout.resizing * {
+  user-select: none;
+}
+
+/* Panel collapse animation */
+.resizable-panel__content {
+  transition: width 200ms ease, height 200ms ease, min-width 200ms ease, min-height 200ms ease;
+}
+
+/* Mobile floating buttons */
+@media (min-width: 768px) {
+  .app-layout__left-toggle,
+  .app-layout__right-toggle {
+    display: none;
+  }
+}
+
+/* Responsive editor/preview layout */
+@media (max-width: 767px) {
+  .app-layout__center-panel > div {
+    flex-direction: column;
+  }
+}
+
+/* Mermaid preview container */
+.mermaid-preview {
+  overflow: auto;
+  height: 100%;
+}
+
+.mermaid-preview svg {
+  max-width: 100%;
+  height: auto;
+}
