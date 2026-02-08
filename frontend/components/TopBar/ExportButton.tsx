@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useCallback, useState, useRef, useEffect } from 'react';
+import { exportSvg, type ExportSvgOptions } from '@/lib/export';
 
 /**
  * Export format options.
@@ -25,6 +26,12 @@ export interface ExportButtonProps {
   size?: 'sm' | 'md' | 'lg';
   /** Additional CSS class */
   className?: string;
+  /** Whether dark mode is active (for background color) */
+  isDarkMode?: boolean;
+  /** Callback when export succeeds */
+  onExportSuccess?: (format: ExportFormat, filename: string) => void;
+  /** Callback when export fails */
+  onExportError?: (format: ExportFormat, error: string) => void;
 }
 
 /**
@@ -191,15 +198,22 @@ export const ExportButton = memo(function ExportButton({
   onExport,
   svgElement,
   diagramTitle = 'diagram',
-  isExporting = false,
+  isExporting: isExportingProp = false,
   enabledFormats = ['svg', 'png', 'pdf'],
   size = 'md',
   className = '',
+  isDarkMode = false,
+  onExportSuccess,
+  onExportError,
 }: ExportButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isExportingInternal, setIsExportingInternal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const sizes = sizeConfig[size];
+
+  // Use external or internal exporting state
+  const isExporting = isExportingProp || isExportingInternal;
 
   /**
    * Toggle dropdown visibility.
@@ -218,14 +232,56 @@ export const ExportButton = memo(function ExportButton({
   }, []);
 
   /**
+   * Perform SVG export directly.
+   */
+  const performSvgExport = useCallback(() => {
+    if (!svgElement) {
+      onExportError?.('svg', 'No SVG element available for export');
+      return;
+    }
+
+    setIsExportingInternal(true);
+
+    try {
+      const options: ExportSvgOptions = {
+        filename: diagramTitle,
+        includeBackground: true,
+        backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
+        padding: 20,
+        includeStyles: true,
+      };
+
+      const result = exportSvg(svgElement, options);
+
+      if (result.success && result.filename) {
+        onExportSuccess?.('svg', result.filename);
+      } else {
+        onExportError?.('svg', result.error || 'Export failed');
+      }
+    } catch (error) {
+      onExportError?.('svg', error instanceof Error ? error.message : 'Export failed');
+    } finally {
+      setIsExportingInternal(false);
+    }
+  }, [svgElement, diagramTitle, isDarkMode, onExportSuccess, onExportError]);
+
+  /**
    * Handle export selection.
    */
   const handleExport = useCallback(
     (format: ExportFormat) => {
       closeDropdown();
+
+      // If we have an SVG element and format is SVG, export directly
+      if (format === 'svg' && svgElement) {
+        performSvgExport();
+        return;
+      }
+
+      // Otherwise, call the onExport callback
       onExport?.(format);
     },
-    [closeDropdown, onExport]
+    [closeDropdown, onExport, svgElement, performSvgExport]
   );
 
   /**
