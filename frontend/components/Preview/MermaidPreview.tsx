@@ -6,6 +6,10 @@ import {
   createMermaidConfig,
   getThemeForMode,
 } from '@/lib/mermaid/config';
+import { useDebounce } from '@/hooks/useDebounce';
+
+/** Default debounce delay for preview updates in milliseconds */
+const PREVIEW_DEBOUNCE_MS = 300;
 
 /**
  * Props for the MermaidPreview component.
@@ -64,6 +68,9 @@ export function MermaidPreview({
   const componentId = useId();
   const containerId = `mermaid-preview-${componentId.replace(/:/g, '-')}`;
 
+  // Debounce source changes for performance (prevents flicker during typing)
+  const debouncedSource = useDebounce(source, PREVIEW_DEBOUNCE_MS);
+
   // Refs for DOM access
   const containerRef = useRef<HTMLDivElement>(null);
   const mermaidRef = useRef<typeof import('mermaid') | null>(null);
@@ -94,12 +101,13 @@ export function MermaidPreview({
   );
 
   /**
-   * Render the Mermaid diagram from source.
+   * Render the Mermaid diagram from debounced source.
    * Uses mermaid.render() API for rendering.
+   * Debouncing prevents excessive re-renders during rapid typing.
    */
   const renderDiagram = useCallback(async () => {
     // Skip if no source or already loading
-    if (!source.trim()) {
+    if (!debouncedSource.trim()) {
       setRenderState({
         status: 'idle',
         svg: null,
@@ -129,7 +137,7 @@ export function MermaidPreview({
       const renderId = `mermaid-render-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
       // Use mermaid.render() API (not deprecated init())
-      const { svg, bindFunctions } = await mermaid.render(renderId, source);
+      const { svg, bindFunctions } = await mermaid.render(renderId, debouncedSource);
 
       // Check if component is still mounted
       if (!isMountedRef.current) return;
@@ -165,7 +173,7 @@ export function MermaidPreview({
       // Call error callback
       onRenderError?.(error);
     }
-  }, [source, initializeMermaid, onRenderSuccess, onRenderError]);
+  }, [debouncedSource, initializeMermaid, onRenderSuccess, onRenderError]);
 
   // Track mount state
   useEffect(() => {
@@ -175,7 +183,7 @@ export function MermaidPreview({
     };
   }, []);
 
-  // Re-render when source or theme changes
+  // Re-render when debounced source or theme changes
   useEffect(() => {
     renderDiagram();
   }, [renderDiagram]);
