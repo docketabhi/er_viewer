@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, useCallback, useId } from 'react';
 import {
   type MermaidTheme,
+  type AppliedMermaidTheme,
   createMermaidConfig,
-  getThemeForMode,
+  resolveMermaidTheme,
 } from '@/lib/mermaid/config';
 import {
   type BlockDirective,
@@ -167,8 +168,8 @@ export function MermaidPreview({
   // Track if component is mounted
   const isMountedRef = useRef(true);
 
-  // Determine the effective theme
-  const effectiveTheme = theme ?? getThemeForMode(isDarkMode);
+  // Determine the effective theme - resolve 'auto' to actual theme based on app mode
+  const effectiveTheme: AppliedMermaidTheme = resolveMermaidTheme(theme ?? 'auto', isDarkMode);
 
   /**
    * Initialize Mermaid with configuration.

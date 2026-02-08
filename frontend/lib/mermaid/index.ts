@@ -8,11 +8,13 @@
 export {
   createMermaidConfig,
   getThemeForMode,
+  resolveMermaidTheme,
   DEFAULT_MERMAID_CONFIG,
 } from './config';
 
 export type {
   MermaidTheme,
+  AppliedMermaidTheme,
   MermaidPreviewConfig,
 } from './config';
 

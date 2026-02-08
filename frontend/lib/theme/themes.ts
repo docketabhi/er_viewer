@@ -224,6 +224,11 @@ export const availableMermaidThemes: Array<{
   description: string;
 }> = [
   {
+    id: 'auto',
+    name: 'Auto',
+    description: 'Automatically match the application theme',
+  },
+  {
     id: 'default',
     name: 'Default',
     description: 'Standard blue theme, works well with light mode',

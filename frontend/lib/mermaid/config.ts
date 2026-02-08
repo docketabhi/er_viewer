@@ -9,19 +9,25 @@ import type { MermaidConfig } from 'mermaid';
 
 /**
  * Available Mermaid themes.
+ * - auto: Automatically select based on app theme (light/dark)
  * - default: Standard light theme
  * - dark: Dark theme for dark mode
  * - forest: Green-tinted theme
  * - neutral: Gray-toned theme
  */
-export type MermaidTheme = 'default' | 'dark' | 'forest' | 'neutral';
+export type MermaidTheme = 'auto' | 'default' | 'dark' | 'forest' | 'neutral';
+
+/**
+ * Mermaid themes that can be directly applied (excludes 'auto').
+ */
+export type AppliedMermaidTheme = Exclude<MermaidTheme, 'auto'>;
 
 /**
  * Configuration options for the MermaidPreview component.
  */
 export interface MermaidPreviewConfig {
-  /** The Mermaid theme to use */
-  theme: MermaidTheme;
+  /** The Mermaid theme to use (must be an applied theme, not 'auto') */
+  theme: AppliedMermaidTheme;
   /** Whether to enable secure mode (disables script execution) */
   secureMode?: boolean;
   /** Custom font family for diagram text */
@@ -100,10 +106,10 @@ export function createMermaidConfig(
 /**
  * Gets theme-specific variable overrides for Mermaid.
  *
- * @param theme - The Mermaid theme
+ * @param theme - The applied Mermaid theme (not 'auto')
  * @returns Theme variables object
  */
-function getThemeVariables(theme: MermaidTheme): Record<string, string> {
+function getThemeVariables(theme: AppliedMermaidTheme): Record<string, string> {
   switch (theme) {
     case 'dark':
       return {
@@ -179,6 +185,35 @@ function getThemeVariables(theme: MermaidTheme): Record<string, string> {
  * @param isDarkMode - Whether the app is in dark mode
  * @returns Appropriate Mermaid theme
  */
-export function getThemeForMode(isDarkMode: boolean): MermaidTheme {
+export function getThemeForMode(isDarkMode: boolean): AppliedMermaidTheme {
   return isDarkMode ? 'dark' : 'default';
+}
+
+/**
+ * Resolves a Mermaid theme preference to an applied theme.
+ *
+ * When the theme is 'auto', it resolves to 'default' or 'dark' based on
+ * the current app theme mode. Otherwise, returns the specified theme.
+ *
+ * @param theme - The user's theme preference
+ * @param isDarkMode - Whether the app is in dark mode
+ * @returns The resolved theme to apply
+ *
+ * @example
+ * ```ts
+ * // User selected 'auto', app is in dark mode
+ * resolveMermaidTheme('auto', true); // 'dark'
+ *
+ * // User selected 'forest', any mode
+ * resolveMermaidTheme('forest', true); // 'forest'
+ * ```
+ */
+export function resolveMermaidTheme(
+  theme: MermaidTheme,
+  isDarkMode: boolean
+): AppliedMermaidTheme {
+  if (theme === 'auto') {
+    return getThemeForMode(isDarkMode);
+  }
+  return theme;
 }

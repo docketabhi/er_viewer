@@ -14,9 +14,11 @@ import {
   type DiagramSettings,
 } from '@/components/Panels';
 import { DiagramProvider, type DiagramEntry } from '@/contexts/DiagramContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useDiagramNavigation } from '@/hooks/useDiagramNavigation';
 import type { BlockDirective } from '@/lib/mermaid/types';
 import type { ProcessedSvg } from '@/lib/mermaid/svgProcessor';
+import type { MermaidTheme } from '@/lib/mermaid/config';
 
 /**
  * Default Mermaid source for the root diagram.
@@ -350,6 +352,8 @@ function CenterPanel({
   currentDiagram,
   currentSource,
   processedSvg,
+  mermaidTheme,
+  isDarkMode,
   onEditorChange,
   onRenderSuccess,
   onRenderError,
@@ -359,6 +363,8 @@ function CenterPanel({
   currentDiagram: DiagramEntry | null;
   currentSource: string;
   processedSvg: ProcessedSvg | null;
+  mermaidTheme: MermaidTheme;
+  isDarkMode: boolean;
   onEditorChange: (value: string | undefined) => void;
   onRenderSuccess: () => void;
   onRenderError: (error: Error) => void;
@@ -380,7 +386,7 @@ function CenterPanel({
           )}
         </div>
         <div className="flex-1 min-h-0">
-          <MonacoEditor value={currentSource} onChange={onEditorChange} theme="vs-dark" />
+          <MonacoEditor value={currentSource} onChange={onEditorChange} theme={isDarkMode ? 'vs-dark' : 'vs'} />
         </div>
       </div>
 
@@ -398,7 +404,8 @@ function CenterPanel({
         <div className="flex-1 relative min-h-0" ref={previewContainerRef}>
           <MermaidPreview
             source={currentSource}
-            isDarkMode={true}
+            theme={mermaidTheme}
+            isDarkMode={isDarkMode}
             onRenderSuccess={onRenderSuccess}
             onRenderError={onRenderError}
             onBlockClick={onBlockClick}
@@ -415,6 +422,10 @@ function CenterPanel({
  * Main content component that uses the diagram navigation context.
  */
 function DiagramViewer() {
+  // Get app theme from context
+  const { resolvedTheme } = useTheme();
+  const isDarkMode = resolvedTheme === 'dark';
+
   const [renderError, setRenderError] = useState<string | null>(null);
   const [processedSvg, setProcessedSvg] = useState<ProcessedSvg | null>(null);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
@@ -429,7 +440,7 @@ function DiagramViewer() {
     minimap: false,
     lineNumbers: true,
     autoSaveInterval: 30,
-    mermaidTheme: 'default',
+    mermaidTheme: 'auto',
     previewDebounce: 300,
     showBlockIndicators: true,
   });
@@ -730,6 +741,8 @@ function DiagramViewer() {
           currentDiagram={currentDiagram}
           currentSource={currentSource}
           processedSvg={processedSvg}
+          mermaidTheme={settings.mermaidTheme}
+          isDarkMode={isDarkMode}
           onEditorChange={handleEditorChange}
           onRenderSuccess={handleRenderSuccess}
           onRenderError={handleRenderError}

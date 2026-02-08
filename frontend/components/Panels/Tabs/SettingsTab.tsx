@@ -34,8 +34,8 @@ export interface DiagramSettings {
   lineNumbers: boolean;
   /** Auto-save interval in seconds (0 = disabled) */
   autoSaveInterval: number;
-  /** Mermaid theme */
-  mermaidTheme: 'default' | 'dark' | 'forest' | 'neutral';
+  /** Mermaid theme - 'auto' follows app theme */
+  mermaidTheme: 'auto' | 'default' | 'dark' | 'forest' | 'neutral';
   /** Preview update debounce in ms */
   previewDebounce: number;
   /** Show block indicators on hover */
@@ -52,7 +52,7 @@ const DEFAULT_SETTINGS: DiagramSettings = {
   minimap: false,
   lineNumbers: true,
   autoSaveInterval: 30,
-  mermaidTheme: 'default',
+  mermaidTheme: 'auto',
   previewDebounce: 300,
   showBlockIndicators: true,
 };
@@ -61,6 +61,7 @@ const DEFAULT_SETTINGS: DiagramSettings = {
  * Mermaid theme options.
  */
 const MERMAID_THEMES = [
+  { value: 'auto', label: 'Auto (follows app theme)' },
   { value: 'default', label: 'Default' },
   { value: 'dark', label: 'Dark' },
   { value: 'forest', label: 'Forest' },
