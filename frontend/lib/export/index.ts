@@ -18,3 +18,14 @@ export type {
   ExportSvgOptions,
   ExportSvgResult,
 } from './exportSvg';
+
+// PNG Export
+export {
+  exportPng,
+  exportPngToDataUrl,
+} from './exportPng';
+
+export type {
+  ExportPngOptions,
+  ExportPngResult,
+} from './exportPng';

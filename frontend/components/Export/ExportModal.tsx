@@ -10,8 +10,10 @@ import {
 } from 'react';
 import {
   exportSvg,
+  exportPng,
   sanitizeFilename,
   type ExportSvgOptions,
+  type ExportPngOptions,
 } from '@/lib/export';
 
 /**
@@ -248,17 +250,16 @@ export const ExportModal = memo(function ExportModal({
     onExportStart?.();
 
     try {
-      // Currently only SVG is implemented
-      if (selectedFormat === 'svg') {
-        const options: ExportSvgOptions = {
-          filename: sanitizeFilename(filename),
-          includeBackground,
-          backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
-          padding: 20,
-          includeStyles: true,
-        };
+      const baseOptions: ExportSvgOptions = {
+        filename: sanitizeFilename(filename),
+        includeBackground,
+        backgroundColor: isDarkMode ? '#1e1e1e' : '#ffffff',
+        padding: 20,
+        includeStyles: true,
+      };
 
-        const result = exportSvg(svgElement, options);
+      if (selectedFormat === 'svg') {
+        const result = exportSvg(svgElement, baseOptions);
 
         if (result.success && result.filename) {
           setExportStatus('success');
@@ -271,8 +272,28 @@ export const ExportModal = memo(function ExportModal({
           setExportStatus('error');
           onExportError?.(result.error || 'Export failed');
         }
+      } else if (selectedFormat === 'png') {
+        const pngOptions: ExportPngOptions = {
+          ...baseOptions,
+          scale: 2, // High-DPI for better quality
+          quality: 1,
+        };
+
+        const result = await exportPng(svgElement, pngOptions);
+
+        if (result.success && result.filename) {
+          setExportStatus('success');
+          onExportSuccess?.(selectedFormat, result.filename);
+          // Close modal after short delay to show success state
+          setTimeout(() => {
+            onClose();
+          }, 800);
+        } else {
+          setExportStatus('error');
+          onExportError?.(result.error || 'PNG export failed');
+        }
       } else {
-        // PNG and PDF not yet implemented
+        // PDF not yet implemented
         setExportStatus('error');
         onExportError?.(`${selectedFormat.toUpperCase()} export is not yet implemented`);
       }
@@ -403,7 +424,7 @@ export const ExportModal = memo(function ExportModal({
               {(Object.keys(formatInfo) as ExportFormat[]).map((format) => {
                 const info = formatInfo[format];
                 const isSelected = selectedFormat === format;
-                const isDisabled = format !== 'svg'; // Only SVG is currently implemented
+                const isDisabled = format === 'pdf'; // SVG and PNG are implemented, PDF coming soon
 
                 return (
                   <button
