@@ -1,7 +1,7 @@
 /**
  * Diagrams Controller
  *
- * REST API endpoints for diagram and version CRUD operations.
+ * REST API endpoints for diagram, version, and block CRUD operations.
  * Follows RESTful conventions with proper HTTP methods and status codes.
  */
 
@@ -20,16 +20,19 @@ import {
 } from '@nestjs/common';
 import { DiagramsService } from './diagrams.service';
 import { VersionsService } from './versions.service';
+import { BlocksService } from './blocks.service';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
 import { UpdateDiagramDto } from './dto/update-diagram.dto';
 import { CreateVersionDto } from './dto/create-version.dto';
-import { Diagram, DiagramVersion } from '../../db';
+import { CreateBlockDto, UpdateBlockDto } from './dto/create-block.dto';
+import { Diagram, DiagramVersion, DiagramBlock } from '../../db';
 
 @Controller('diagrams')
 export class DiagramsController {
   constructor(
     private readonly diagramsService: DiagramsService,
     private readonly versionsService: VersionsService,
+    private readonly blocksService: BlocksService,
   ) {}
 
   /**
@@ -160,5 +163,82 @@ export class DiagramsController {
     @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string,
   ): Promise<{ deleted: boolean; id: string }> {
     return this.versionsService.remove(id, versionId);
+  }
+
+  // =====================
+  // BLOCK ENDPOINTS
+  // =====================
+
+  /**
+   * Create a new block linking a parent entity to a child diagram
+   * POST /diagrams/:id/blocks
+   */
+  @Post(':id/blocks')
+  @HttpCode(HttpStatus.CREATED)
+  async createBlock(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() createBlockDto: CreateBlockDto,
+  ): Promise<DiagramBlock> {
+    return this.blocksService.create(id, createBlockDto);
+  }
+
+  /**
+   * Get all blocks for a diagram (child diagram links)
+   * GET /diagrams/:id/blocks
+   */
+  @Get(':id/blocks')
+  async findAllBlocks(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<DiagramBlock[]> {
+    return this.blocksService.findAllByParent(id);
+  }
+
+  /**
+   * Get ancestry path for a diagram (parent diagrams leading to this one)
+   * GET /diagrams/:id/ancestry
+   */
+  @Get(':id/ancestry')
+  async getAncestry(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<string[]> {
+    return this.blocksService.getAncestryPath(id);
+  }
+
+  /**
+   * Get a specific block by ID
+   * GET /diagrams/:id/blocks/:blockId
+   */
+  @Get(':id/blocks/:blockId')
+  async findOneBlock(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('blockId', new ParseUUIDPipe({ version: '4' })) blockId: string,
+  ): Promise<DiagramBlock> {
+    return this.blocksService.findOneByParent(id, blockId);
+  }
+
+  /**
+   * Update a block
+   * PATCH /diagrams/:id/blocks/:blockId
+   */
+  @Patch(':id/blocks/:blockId')
+  async updateBlock(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('blockId', new ParseUUIDPipe({ version: '4' })) blockId: string,
+    @Body() updateBlockDto: UpdateBlockDto,
+  ): Promise<DiagramBlock> {
+    return this.blocksService.update(id, blockId, updateBlockDto);
+  }
+
+  /**
+   * Delete a specific block
+   * DELETE /diagrams/:id/blocks/:blockId
+   */
+  @Delete(':id/blocks/:blockId')
+  @HttpCode(HttpStatus.OK)
+  async removeBlock(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('blockId', new ParseUUIDPipe({ version: '4' })) blockId: string,
+  ): Promise<{ deleted: boolean; id: string }> {
+    return this.blocksService.remove(id, blockId);
   }
 }
