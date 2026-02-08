@@ -1,6 +1,12 @@
 'use client';
 
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useEffect, useState } from 'react';
+import {
+  usePresence,
+  createGuestUser,
+  type CurrentUser,
+} from '@/hooks/usePresence';
+import type { ConnectionState } from '@/lib/websocket';
 
 /**
  * User presence status.
@@ -321,6 +327,190 @@ export const PresenceAvatars = memo(function PresenceAvatars({
           count={overflowCount}
           sizes={sizes}
           users={overflowUsers}
+        />
+      )}
+    </div>
+  );
+});
+
+// =====================
+// CONNECTION INDICATOR
+// =====================
+
+/**
+ * Connection status color mapping.
+ */
+const connectionStatusColors: Record<ConnectionState, string> = {
+  connected: 'bg-green-500',
+  connecting: 'bg-yellow-500 animate-pulse',
+  disconnected: 'bg-gray-400',
+  error: 'bg-red-500',
+};
+
+/**
+ * Connection status labels.
+ */
+const connectionStatusLabels: Record<ConnectionState, string> = {
+  connected: 'Connected',
+  connecting: 'Connecting...',
+  disconnected: 'Disconnected',
+  error: 'Connection error',
+};
+
+/**
+ * Props for ConnectionIndicator.
+ */
+export interface ConnectionIndicatorProps {
+  /** Current connection state */
+  connectionState: ConnectionState;
+  /** Size variant */
+  size?: 'sm' | 'md';
+  /** Show label text */
+  showLabel?: boolean;
+  /** Additional CSS class */
+  className?: string;
+}
+
+/**
+ * Connection indicator showing WebSocket connection status.
+ */
+export const ConnectionIndicator = memo(function ConnectionIndicator({
+  connectionState,
+  size = 'sm',
+  showLabel = false,
+  className = '',
+}: ConnectionIndicatorProps) {
+  const dotSize = size === 'sm' ? 'w-2 h-2' : 'w-2.5 h-2.5';
+  const textSize = size === 'sm' ? 'text-xs' : 'text-sm';
+
+  return (
+    <div
+      className={`
+        connection-indicator
+        flex items-center gap-1.5
+        ${className}
+      `}
+      title={connectionStatusLabels[connectionState]}
+      aria-label={connectionStatusLabels[connectionState]}
+    >
+      <span
+        className={`
+          ${dotSize}
+          ${connectionStatusColors[connectionState]}
+          rounded-full
+        `}
+        aria-hidden="true"
+      />
+      {showLabel && (
+        <span className={`${textSize} text-muted-foreground`}>
+          {connectionStatusLabels[connectionState]}
+        </span>
+      )}
+    </div>
+  );
+});
+
+// =====================
+// CONNECTED PRESENCE AVATARS
+// =====================
+
+/**
+ * Props for ConnectedPresenceAvatars.
+ */
+export interface ConnectedPresenceAvatarsProps {
+  /** Diagram ID to track presence for */
+  diagramId: string | null;
+  /** Current user info (if null, creates guest user) */
+  currentUser?: CurrentUser | null;
+  /** Whether the user is actively editing */
+  isEditing?: boolean;
+  /** Maximum avatars to show */
+  maxVisible?: number;
+  /** Size variant */
+  size?: 'sm' | 'md' | 'lg';
+  /** Show connection indicator */
+  showConnectionStatus?: boolean;
+  /** Callback when an avatar is clicked */
+  onUserClick?: (user: PresenceUser) => void;
+  /** Additional CSS class */
+  className?: string;
+}
+
+/**
+ * Connected PresenceAvatars with WebSocket integration.
+ *
+ * This component manages WebSocket connection and presence state automatically.
+ * It shows other users viewing/editing the same diagram in real-time.
+ *
+ * @example
+ * ```tsx
+ * <ConnectedPresenceAvatars
+ *   diagramId="abc123"
+ *   currentUser={{ id: 'user1', displayName: 'Alice' }}
+ *   isEditing={true}
+ *   showConnectionStatus
+ * />
+ * ```
+ */
+export const ConnectedPresenceAvatars = memo(function ConnectedPresenceAvatars({
+  diagramId,
+  currentUser: providedUser,
+  isEditing = false,
+  maxVisible = 5,
+  size = 'md',
+  showConnectionStatus = false,
+  onUserClick,
+  className = '',
+}: ConnectedPresenceAvatarsProps) {
+  // Create or use guest user
+  const [guestUser, setGuestUser] = useState<CurrentUser | null>(null);
+
+  useEffect(() => {
+    // Only create guest user on client side
+    if (typeof window !== 'undefined' && !providedUser) {
+      setGuestUser(createGuestUser());
+    }
+  }, [providedUser]);
+
+  const currentUser = providedUser ?? guestUser;
+
+  // Use presence hook
+  const {
+    users,
+    connectionState,
+    currentUserPresence,
+  } = usePresence({
+    diagramId,
+    currentUser,
+    isEditing,
+  });
+
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      {/* Connection status indicator */}
+      {showConnectionStatus && (
+        <ConnectionIndicator
+          connectionState={connectionState}
+          size="sm"
+        />
+      )}
+
+      {/* Presence avatars */}
+      <PresenceAvatars
+        users={users}
+        maxVisible={maxVisible}
+        currentUserId={currentUserPresence?.id}
+        onUserClick={onUserClick}
+        size={size}
+      />
+
+      {/* Show current user's avatar with status */}
+      {currentUserPresence && (
+        <Avatar
+          user={currentUserPresence}
+          sizes={sizeConfig[size]}
+          isFirst
+          showStatus
         />
       )}
     </div>

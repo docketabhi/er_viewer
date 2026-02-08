@@ -18,7 +18,8 @@
     "@monaco-editor/react": "^4.7.0-rc.0",
     "mermaid": "^11.12.2",
     "clsx": "^2.1.1",
-    "jspdf": "^2.5.2"
+    "jspdf": "^2.5.2",
+    "socket.io-client": "^4.7.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

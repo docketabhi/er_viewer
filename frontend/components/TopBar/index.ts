@@ -10,7 +10,11 @@ export { ShareButton, type ShareButtonProps, type ShareMode } from './ShareButto
 export { ExportButton, type ExportButtonProps, type ExportFormat } from './ExportButton';
 export {
   PresenceAvatars,
+  ConnectedPresenceAvatars,
+  ConnectionIndicator,
   type PresenceAvatarsProps,
+  type ConnectedPresenceAvatarsProps,
+  type ConnectionIndicatorProps,
   type PresenceUser,
   type PresenceStatus,
 } from './PresenceAvatars';

@@ -41,3 +41,12 @@ export {
   type UseAutoSaveOptions,
   type UseAutoSaveResult,
 } from './useAutoSave';
+export {
+  usePresence,
+  generateUserColor,
+  generateAnonymousId,
+  createGuestUser,
+  type CurrentUser,
+  type UsePresenceOptions,
+  type UsePresenceResult,
+} from './usePresence';
