@@ -29,3 +29,16 @@ export type {
   ExportPngOptions,
   ExportPngResult,
 } from './exportPng';
+
+// PDF Export
+export {
+  exportPdf,
+  exportPdfToBlob,
+} from './exportPdf';
+
+export type {
+  ExportPdfOptions,
+  ExportPdfResult,
+  PdfOrientation,
+  PdfFormat,
+} from './exportPdf';

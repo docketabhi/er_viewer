@@ -11,9 +11,11 @@ import {
 import {
   exportSvg,
   exportPng,
+  exportPdf,
   sanitizeFilename,
   type ExportSvgOptions,
   type ExportPngOptions,
+  type ExportPdfOptions,
 } from '@/lib/export';
 
 /**
@@ -292,10 +294,28 @@ export const ExportModal = memo(function ExportModal({
           setExportStatus('error');
           onExportError?.(result.error || 'PNG export failed');
         }
-      } else {
-        // PDF not yet implemented
-        setExportStatus('error');
-        onExportError?.(`${selectedFormat.toUpperCase()} export is not yet implemented`);
+      } else if (selectedFormat === 'pdf') {
+        const pdfOptions: ExportPdfOptions = {
+          ...baseOptions,
+          format: 'auto', // Auto-size page to fit diagram
+          fitToPage: true,
+          margin: 10,
+          title: sanitizeFilename(filename),
+        };
+
+        const result = await exportPdf(svgElement, pdfOptions);
+
+        if (result.success && result.filename) {
+          setExportStatus('success');
+          onExportSuccess?.(selectedFormat, result.filename);
+          // Close modal after short delay to show success state
+          setTimeout(() => {
+            onClose();
+          }, 800);
+        } else {
+          setExportStatus('error');
+          onExportError?.(result.error || 'PDF export failed');
+        }
       }
     } catch (error) {
       setExportStatus('error');
@@ -424,14 +444,13 @@ export const ExportModal = memo(function ExportModal({
               {(Object.keys(formatInfo) as ExportFormat[]).map((format) => {
                 const info = formatInfo[format];
                 const isSelected = selectedFormat === format;
-                const isDisabled = format === 'pdf'; // SVG and PNG are implemented, PDF coming soon
 
                 return (
                   <button
                     key={format}
                     type="button"
-                    onClick={() => !isDisabled && setSelectedFormat(format)}
-                    disabled={isExporting || isDisabled}
+                    onClick={() => setSelectedFormat(format)}
+                    disabled={isExporting}
                     className={`
                       p-3 rounded-md border text-center
                       transition-all
@@ -439,14 +458,15 @@ export const ExportModal = memo(function ExportModal({
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border bg-background text-foreground hover:border-muted-foreground'
                       }
-                      ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                      cursor-pointer
                       focus:outline-none focus:ring-2 focus:ring-primary
+                      disabled:opacity-50 disabled:cursor-not-allowed
                     `}
-                    title={isDisabled ? `${info.label} export coming soon` : info.description}
+                    title={info.description}
                   >
                     <div className="font-medium">{info.label}</div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      {isDisabled ? 'Coming soon' : info.description.split(',')[0]}
+                      {info.description.split(',')[0]}
                     </div>
                   </button>
                 );
