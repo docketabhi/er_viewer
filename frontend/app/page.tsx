@@ -5,7 +5,14 @@ import { MonacoEditor } from '@/components/Editor';
 import { MermaidPreview } from '@/components/Preview';
 import { Breadcrumb, BackButton } from '@/components/Navigation';
 import { AppLayout, PanelToggleButton } from '@/components/Layout';
-import { LeftPanel, type FileTreeNode, type RecentDiagram } from '@/components/Panels';
+import {
+  LeftPanel,
+  RightPanel,
+  type FileTreeNode,
+  type RecentDiagram,
+  type DiagramVersion,
+  type DiagramSettings,
+} from '@/components/Panels';
 import { DiagramProvider, type DiagramEntry } from '@/contexts/DiagramContext';
 import { useDiagramNavigation } from '@/hooks/useDiagramNavigation';
 import type { BlockDirective } from '@/lib/mermaid/types';
@@ -321,81 +328,6 @@ function generateMockRecentDiagrams(): RecentDiagram[] {
 }
 
 /**
- * Right panel placeholder component.
- * Will be replaced with RightPanel in subtask-8-3.
- */
-function RightPanelPlaceholder() {
-  const [activeTab, setActiveTab] = useState<'docs' | 'snippets' | 'history'>('docs');
-
-  return (
-    <div className="h-full flex flex-col">
-      {/* Tab headers */}
-      <div className="flex border-b border-border">
-        {(['docs', 'snippets', 'history'] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className={`
-              px-4 py-2 text-sm font-medium
-              border-b-2 transition-colors
-              ${activeTab === tab
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-              }
-            `}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      <div className="flex-1 p-4 overflow-auto">
-        {activeTab === 'docs' && (
-          <div className="space-y-3 text-sm">
-            <h3 className="font-semibold">Quick Reference</h3>
-            <div className="space-y-2 text-muted-foreground">
-              <p><code className="bg-muted px-1 rounded">erDiagram</code> - Start ER diagram</p>
-              <p><code className="bg-muted px-1 rounded">||--o{'{}'}</code> - One to many</p>
-              <p><code className="bg-muted px-1 rounded">||--||</code> - One to one</p>
-              <p><code className="bg-muted px-1 rounded">%%block:</code> - Add nested block</p>
-            </div>
-          </div>
-        )}
-        {activeTab === 'snippets' && (
-          <div className="space-y-3 text-sm">
-            <h3 className="font-semibold">Code Snippets</h3>
-            <div className="space-y-2">
-              <button className="w-full text-left px-3 py-2 rounded bg-muted hover:bg-muted/80 text-sm">
-                Basic ER Diagram
-              </button>
-              <button className="w-full text-left px-3 py-2 rounded bg-muted hover:bg-muted/80 text-sm">
-                Entity with Attributes
-              </button>
-              <button className="w-full text-left px-3 py-2 rounded bg-muted hover:bg-muted/80 text-sm">
-                Block Directive
-              </button>
-            </div>
-          </div>
-        )}
-        {activeTab === 'history' && (
-          <div className="space-y-3 text-sm">
-            <h3 className="font-semibold">Version History</h3>
-            <div className="space-y-2 text-muted-foreground">
-              <p className="italic">No versions saved yet</p>
-              <button className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90">
-                Save Snapshot
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
  * Footer component for navigation help.
  */
 function AppFooter({ depth }: { depth: number }) {
@@ -489,6 +421,18 @@ function DiagramViewer() {
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [recentDiagrams, setRecentDiagrams] = useState<RecentDiagram[]>(generateMockRecentDiagrams);
   const [searchQuery, setSearchQuery] = useState('');
+  const [versions, setVersions] = useState<DiagramVersion[]>([]);
+  const [settings, setSettings] = useState<DiagramSettings>({
+    fontSize: 14,
+    tabSize: 2,
+    wordWrap: true,
+    minimap: false,
+    lineNumbers: true,
+    autoSaveInterval: 30,
+    mermaidTheme: 'default',
+    previewDebounce: 300,
+    showBlockIndicators: true,
+  });
 
   // Use the navigation hook
   const {
@@ -676,6 +620,69 @@ function DiagramViewer() {
    */
   const fileTreeNodes = useMemo(() => MOCK_FILE_TREE_NODES, []);
 
+  /**
+   * Handle snippet insertion from RightPanel.
+   */
+  const handleInsertSnippet = useCallback(
+    (snippet: string) => {
+      // Insert snippet at the end of current source
+      const newSource = currentSource + '\n' + snippet;
+      setSource(newSource);
+    },
+    [currentSource, setSource]
+  );
+
+  /**
+   * Handle creating a snapshot from RightPanel.
+   */
+  const handleCreateSnapshot = useCallback(
+    (label?: string) => {
+      if (!currentDiagram) return;
+
+      const newVersion: DiagramVersion = {
+        id: `version-${Date.now()}`,
+        label,
+        createdAt: new Date(),
+        createdBy: 'Current User',
+        isAutoSave: false,
+      };
+      setVersions((prev) => [newVersion, ...prev]);
+    },
+    [currentDiagram]
+  );
+
+  /**
+   * Handle restoring a version from RightPanel.
+   */
+  const handleRestoreVersion = useCallback(
+    (versionId: string) => {
+      // In a real app, this would fetch the version content from the API
+      // For now, we just log it
+      const version = versions.find((v) => v.id === versionId);
+      if (version) {
+        // Mock restore - in production this would restore actual content
+      }
+    },
+    [versions]
+  );
+
+  /**
+   * Handle selecting a version for preview from RightPanel.
+   */
+  const handleSelectVersion = useCallback((versionId: string) => {
+    // In production, this would show a preview of the version
+  }, []);
+
+  /**
+   * Handle settings change from RightPanel.
+   */
+  const handleSettingsChange = useCallback(
+    (changes: Partial<DiagramSettings>) => {
+      setSettings((prev) => ({ ...prev, ...changes }));
+    },
+    []
+  );
+
   // Loading state during navigation
   if (isNavigating) {
     return (
@@ -730,7 +737,18 @@ function DiagramViewer() {
           onSvgProcessed={handleSvgProcessed}
         />
       }
-      rightPanel={<RightPanelPlaceholder />}
+      rightPanel={
+        <RightPanel
+          diagramId={currentDiagram?.id}
+          versions={versions}
+          settings={settings}
+          onInsertSnippet={handleInsertSnippet}
+          onCreateSnapshot={handleCreateSnapshot}
+          onRestoreVersion={handleRestoreVersion}
+          onSelectVersion={handleSelectVersion}
+          onSettingsChange={handleSettingsChange}
+        />
+      }
       footer={<AppFooter depth={depth} />}
       showLeftPanel={showLeftPanel}
       showRightPanel={showRightPanel}
