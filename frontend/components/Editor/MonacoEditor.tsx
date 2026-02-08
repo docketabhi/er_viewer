@@ -2,7 +2,11 @@
 
 import dynamic from 'next/dynamic';
 import type { OnChange, OnMount } from '@monaco-editor/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
+import {
+  registerMermaidLanguage,
+  MERMAID_LANGUAGE_ID,
+} from '@/lib/monaco/mermaidLanguage';
 
 /**
  * Dynamically import Monaco Editor with SSR disabled.
@@ -26,8 +30,12 @@ export interface MonacoEditorProps {
   value: string;
   /** Callback fired when the editor content changes */
   onChange?: (value: string | undefined) => void;
-  /** Editor theme - 'vs-dark' or 'light' */
-  theme?: 'vs-dark' | 'light';
+  /**
+   * Editor theme - supports both standard Monaco themes and Mermaid-specific themes.
+   * - 'vs-dark' or 'mermaid-dark': Dark theme with Mermaid syntax highlighting
+   * - 'light' or 'mermaid-light': Light theme with Mermaid syntax highlighting
+   */
+  theme?: 'vs-dark' | 'light' | 'mermaid-dark' | 'mermaid-light';
   /** CSS height of the editor */
   height?: string;
   /** Whether the editor is read-only */
@@ -51,6 +59,23 @@ export interface MonacoEditorProps {
  * />
  * ```
  */
+/**
+ * Maps theme prop to Mermaid-specific Monaco theme.
+ * Ensures syntax highlighting works correctly for both dark and light modes.
+ */
+function getMermaidTheme(theme: MonacoEditorProps['theme']): string {
+  switch (theme) {
+    case 'vs-dark':
+    case 'mermaid-dark':
+      return 'mermaid-dark';
+    case 'light':
+    case 'mermaid-light':
+      return 'mermaid-light';
+    default:
+      return 'mermaid-dark';
+  }
+}
+
 export function MonacoEditor({
   value,
   onChange,
@@ -60,8 +85,15 @@ export function MonacoEditor({
   onMount,
 }: MonacoEditorProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const languageRegisteredRef = useRef(false);
 
   const handleMount: OnMount = useCallback((editor, monaco) => {
+    // Register Mermaid language (only once per Monaco instance)
+    if (!languageRegisteredRef.current) {
+      registerMermaidLanguage(monaco);
+      languageRegisteredRef.current = true;
+    }
+
     setIsLoading(false);
 
     // Configure editor settings for better Mermaid editing experience
@@ -86,6 +118,9 @@ export function MonacoEditor({
     onChange?.(newValue);
   }, [onChange]);
 
+  // Get the appropriate Mermaid theme
+  const monacoTheme = getMermaidTheme(theme);
+
   return (
     <div className="relative h-full w-full">
       {isLoading && (
@@ -95,12 +130,12 @@ export function MonacoEditor({
       )}
       <Editor
         height={height}
-        defaultLanguage="plaintext"
-        language="plaintext"
+        defaultLanguage={MERMAID_LANGUAGE_ID}
+        language={MERMAID_LANGUAGE_ID}
         value={value}
         onChange={handleChange}
         onMount={handleMount}
-        theme={theme}
+        theme={monacoTheme}
         options={{
           readOnly,
           minimap: { enabled: false },
