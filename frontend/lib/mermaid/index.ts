@@ -28,6 +28,24 @@ export {
   countBlockDirectives,
 } from './parser';
 
+// SVG Processor exports
+export {
+  findEntityNodes,
+  processSvg,
+  getEntityNodeInfo,
+  hasEntityNode,
+  getEntityNames,
+  getEntityBoundingBox,
+  cleanupEntityHandlers,
+  applyEntityHoverStyles,
+} from './svgProcessor';
+
+export type {
+  EntityNodeInfo,
+  ProcessedSvg,
+  ProcessSvgOptions,
+} from './svgProcessor';
+
 // Type exports
 export type {
   BlockDirective,

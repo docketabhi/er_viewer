@@ -6,6 +6,13 @@ import {
   createMermaidConfig,
   getThemeForMode,
 } from '@/lib/mermaid/config';
+import {
+  type BlockDirective,
+  type ProcessedSvg,
+  processSvg,
+  applyEntityHoverStyles,
+  cleanupEntityHandlers,
+} from '@/lib/mermaid/svgProcessor';
 import { useDebounce } from '@/hooks/useDebounce';
 import { ErrorDisplay } from './ErrorDisplay';
 
@@ -26,6 +33,20 @@ export interface MermaidPreviewProps {
   onRenderSuccess?: (svg: string) => void;
   /** Callback fired when rendering fails */
   onRenderError?: (error: Error) => void;
+  /** Callback fired when an entity is clicked */
+  onEntityClick?: (entityName: string, event: MouseEvent) => void;
+  /** Callback fired when an entity is right-clicked */
+  onEntityContextMenu?: (entityName: string, event: MouseEvent) => void;
+  /** Callback fired when a block badge is clicked for navigation */
+  onBlockClick?: (block: BlockDirective, event: MouseEvent) => void;
+  /** Callback fired when mouse enters an entity */
+  onEntityMouseEnter?: (entityName: string, event: MouseEvent) => void;
+  /** Callback fired when mouse leaves an entity */
+  onEntityMouseLeave?: (entityName: string, event: MouseEvent) => void;
+  /** Callback fired after SVG is processed with entity info */
+  onSvgProcessed?: (processedSvg: ProcessedSvg) => void;
+  /** Whether to add visual indicators for entities with blocks */
+  showBlockIndicators?: boolean;
   /** Additional CSS class for the container */
   className?: string;
 }
@@ -63,6 +84,13 @@ export function MermaidPreview({
   isDarkMode = false,
   onRenderSuccess,
   onRenderError,
+  onEntityClick,
+  onEntityContextMenu,
+  onBlockClick,
+  onEntityMouseEnter,
+  onEntityMouseLeave,
+  onSvgProcessed,
+  showBlockIndicators = true,
   className = '',
 }: MermaidPreviewProps) {
   // Generate a unique ID for this component instance
@@ -155,9 +183,28 @@ export function MermaidPreview({
 
       // If container exists, insert SVG and bind any interactive functions
       if (containerRef.current) {
+        // Clean up previous handlers before inserting new SVG
+        cleanupEntityHandlers(containerRef.current);
+
         containerRef.current.innerHTML = svg;
         // Mermaid's bindFunctions attaches click handlers for interactive diagrams
         bindFunctions?.(containerRef.current);
+
+        // Post-process SVG to identify entity nodes and attach handlers
+        const processedSvg = processSvg(containerRef.current, debouncedSource, {
+          onEntityClick,
+          onEntityContextMenu,
+          onBlockClick,
+          onEntityMouseEnter,
+          onEntityMouseLeave,
+          addBlockIndicators: showBlockIndicators,
+        });
+
+        // Apply hover styles for better UX
+        applyEntityHoverStyles(containerRef.current);
+
+        // Notify parent of processed SVG
+        onSvgProcessed?.(processedSvg);
       }
     } catch (err) {
       // Check if component is still mounted
@@ -174,7 +221,19 @@ export function MermaidPreview({
       // Call error callback
       onRenderError?.(error);
     }
-  }, [debouncedSource, initializeMermaid, onRenderSuccess, onRenderError]);
+  }, [
+    debouncedSource,
+    initializeMermaid,
+    onRenderSuccess,
+    onRenderError,
+    onEntityClick,
+    onEntityContextMenu,
+    onBlockClick,
+    onEntityMouseEnter,
+    onEntityMouseLeave,
+    onSvgProcessed,
+    showBlockIndicators,
+  ]);
 
   // Track mount state
   useEffect(() => {
