@@ -14,9 +14,10 @@ import {
   type DiagramSettings,
 } from '@/components/Panels';
 import { EntityContextMenu } from '@/components/ContextMenu';
-import { DiagramProvider, type DiagramEntry } from '@/contexts/DiagramContext';
+import { DiagramProvider, useDiagram, type DiagramEntry } from '@/contexts/DiagramContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useDiagramNavigation, useContextMenu } from '@/hooks';
+import { useDiagramNavigation, useContextMenu, useAutoSave } from '@/hooks';
+import { diagramsApi, ApiError } from '@/lib/api';
 import type { BlockDirective } from '@/lib/mermaid/types';
 import type { ProcessedSvg, EntityNodeInfo } from '@/lib/mermaid/svgProcessor';
 import type { MermaidTheme } from '@/lib/mermaid/config';
@@ -154,6 +155,80 @@ async function fetchChildDiagram(diagramId: string): Promise<DiagramEntry | null
 }
 
 /**
+ * Auto-save status indicator component.
+ */
+function AutoSaveIndicator({
+  isDirty,
+  isSaving,
+  lastSavedAt,
+  saveError,
+  onManualSave,
+}: {
+  isDirty: boolean;
+  isSaving: boolean;
+  lastSavedAt: Date | null;
+  saveError: Error | null;
+  onManualSave: () => void;
+}) {
+  // Format the last saved time
+  const formattedTime = lastSavedAt
+    ? lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  if (isSaving) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        <span>Saving...</span>
+      </div>
+    );
+  }
+
+  if (saveError) {
+    return (
+      <button
+        onClick={onManualSave}
+        className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 transition-colors"
+        title={`Save failed: ${saveError.message}. Click to retry.`}
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>Save failed</span>
+      </button>
+    );
+  }
+
+  if (isDirty) {
+    return (
+      <button
+        onClick={onManualSave}
+        className="flex items-center gap-1.5 text-xs text-amber-500 hover:text-amber-600 transition-colors"
+        title="Unsaved changes. Click to save now."
+      >
+        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+          <circle cx="10" cy="10" r="4" />
+        </svg>
+        <span>Unsaved</span>
+      </button>
+    );
+  }
+
+  if (formattedTime) {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground" title={`Last saved at ${formattedTime}`}>
+        <svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+        <span>Saved {formattedTime}</span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+/**
  * Header component for the application.
  */
 function AppHeader({
@@ -168,6 +243,11 @@ function AppHeader({
   showRightPanel,
   onToggleLeftPanel,
   onToggleRightPanel,
+  isDirty,
+  isSaving,
+  lastSavedAt,
+  saveError,
+  onManualSave,
 }: {
   currentDiagram: DiagramEntry | null;
   renderError: string | null;
@@ -180,6 +260,11 @@ function AppHeader({
   showRightPanel: boolean;
   onToggleLeftPanel: () => void;
   onToggleRightPanel: () => void;
+  isDirty: boolean;
+  isSaving: boolean;
+  lastSavedAt: Date | null;
+  saveError: Error | null;
+  onManualSave: () => void;
 }) {
   return (
     <div className="flex flex-col">
@@ -200,6 +285,15 @@ function AppHeader({
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Auto-save status indicator */}
+          <AutoSaveIndicator
+            isDirty={isDirty}
+            isSaving={isSaving}
+            lastSavedAt={lastSavedAt}
+            saveError={saveError}
+            onManualSave={onManualSave}
+          />
+
           {/* Render error indicator */}
           {renderError && (
             <span className="text-xs text-red-500">Syntax error</span>
@@ -431,6 +525,9 @@ function DiagramViewer() {
   const { resolvedTheme } = useTheme();
   const isDarkMode = resolvedTheme === 'dark';
 
+  // Get diagram context for save state
+  const { state: diagramState, markSaved, loadFromLocalStorage } = useDiagram();
+
   const [renderError, setRenderError] = useState<string | null>(null);
   const [processedSvg, setProcessedSvg] = useState<ProcessedSvg | null>(null);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
@@ -487,12 +584,83 @@ function DiagramViewer() {
     },
   });
 
+  /**
+   * Save diagram to backend API.
+   * Falls back to localStorage-only if the diagram is new/mock or API fails.
+   */
+  const saveDiagram = useCallback(async (source: string) => {
+    if (!currentDiagram) return;
+
+    // Check if this is a real backend diagram (UUID format)
+    const isRealDiagram = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentDiagram.id);
+
+    if (isRealDiagram) {
+      try {
+        await diagramsApi.updateSource(currentDiagram.id, source);
+        markSaved();
+      } catch (err) {
+        // If it's a 404, the diagram might not exist in the backend yet
+        if (err instanceof ApiError && err.isNotFound()) {
+          // Just save to localStorage, don't throw
+          markSaved();
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      // For mock/local diagrams, just mark as saved (localStorage handles it)
+      markSaved();
+    }
+  }, [currentDiagram, markSaved]);
+
+  // Set up auto-save
+  const {
+    isDirty: autoSaveIsDirty,
+    isSaving: autoSaveIsSaving,
+    saveError: autoSaveSaveError,
+    lastSavedAt: autoSaveLastSavedAt,
+    save: manualSave,
+  } = useAutoSave({
+    id: currentDiagram?.id ?? 'default',
+    content: currentSource,
+    onSave: saveDiagram,
+    interval: settings.autoSaveInterval * 1000, // Convert seconds to ms
+    debounceDelay: 1000,
+    enabled: Boolean(currentDiagram),
+    onSaveSuccess: () => {
+      // Create auto-save version entry
+      if (currentDiagram) {
+        const autoSaveVersion: DiagramVersion = {
+          id: `auto-${Date.now()}`,
+          label: 'Auto-save',
+          createdAt: new Date(),
+          createdBy: 'Auto-save',
+          isAutoSave: true,
+        };
+        setVersions((prev) => {
+          // Keep only the latest 5 auto-saves
+          const autoSaves = prev.filter((v) => v.isAutoSave);
+          const manualSaves = prev.filter((v) => !v.isAutoSave);
+          const newAutoSaves = [autoSaveVersion, ...autoSaves].slice(0, 5);
+          return [...newAutoSaves, ...manualSaves];
+        });
+      }
+    },
+  });
+
   // Initialize with default diagram if no current diagram
+  // Also try to load from localStorage on initial mount
   useEffect(() => {
     if (!currentDiagram) {
-      setDiagram(DEFAULT_ROOT_DIAGRAM);
+      // Try to load from localStorage first
+      const savedDiagram = loadFromLocalStorage('root');
+      if (savedDiagram) {
+        setDiagram(savedDiagram);
+      } else {
+        setDiagram(DEFAULT_ROOT_DIAGRAM);
+      }
     }
-  }, [currentDiagram, setDiagram]);
+  }, [currentDiagram, setDiagram, loadFromLocalStorage]);
 
   /**
    * Handle command palette 'Create Subdiagram from Selection' action.
@@ -1010,6 +1178,11 @@ function DiagramViewer() {
             showRightPanel={showRightPanel}
             onToggleLeftPanel={toggleLeftPanel}
             onToggleRightPanel={toggleRightPanel}
+            isDirty={autoSaveIsDirty || diagramState.isDirty}
+            isSaving={autoSaveIsSaving || diagramState.isSaving}
+            lastSavedAt={autoSaveLastSavedAt || diagramState.lastSavedAt}
+            saveError={autoSaveSaveError}
+            onManualSave={manualSave}
           />
         }
         leftPanel={

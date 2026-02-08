@@ -33,3 +33,11 @@ export {
   type UseContextMenuOptions,
   type UseContextMenuResult,
 } from './useContextMenu';
+export {
+  useAutoSave,
+  loadFromLocalStorage,
+  clearLocalStorage,
+  listSavedDiagrams,
+  type UseAutoSaveOptions,
+  type UseAutoSaveResult,
+} from './useAutoSave';

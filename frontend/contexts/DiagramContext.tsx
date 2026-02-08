@@ -5,9 +5,16 @@ import {
   useContext,
   useReducer,
   useCallback,
+  useEffect,
   type ReactNode,
 } from 'react';
 import type { BlockDirective } from '@/lib/mermaid/types';
+
+/**
+ * Storage key prefix for localStorage persistence.
+ */
+const STORAGE_KEY_PREFIX = 'er-viewer-diagram-';
+const CURRENT_DIAGRAM_KEY = 'er-viewer-current-diagram';
 
 /**
  * Represents a diagram in the navigation stack.
@@ -49,6 +56,14 @@ export interface DiagramState {
   isNavigating: boolean;
   /** Error from navigation attempt */
   navigationError: string | null;
+  /** Whether the current diagram has unsaved changes */
+  isDirty: boolean;
+  /** Timestamp of last save */
+  lastSavedAt: Date | null;
+  /** Whether a save operation is in progress */
+  isSaving: boolean;
+  /** Last save error */
+  saveError: string | null;
 }
 
 /**
@@ -62,7 +77,12 @@ type DiagramAction =
   | { type: 'UPDATE_SOURCE'; payload: string }
   | { type: 'SET_NAVIGATING'; payload: boolean }
   | { type: 'SET_NAVIGATION_ERROR'; payload: string | null }
-  | { type: 'RESET_NAVIGATION' };
+  | { type: 'RESET_NAVIGATION' }
+  | { type: 'SET_DIRTY'; payload: boolean }
+  | { type: 'SET_SAVING'; payload: boolean }
+  | { type: 'SET_SAVE_ERROR'; payload: string | null }
+  | { type: 'MARK_SAVED'; payload: Date }
+  | { type: 'LOAD_FROM_STORAGE'; payload: { diagram: DiagramEntry; savedAt: Date } };
 
 /**
  * Context value type.
@@ -90,6 +110,20 @@ export interface DiagramContextValue {
   clearNavigationError: () => void;
   /** Reset navigation to root */
   resetNavigation: () => void;
+  /** Mark the current diagram as dirty (has unsaved changes) */
+  markDirty: () => void;
+  /** Mark the current diagram as saved */
+  markSaved: () => void;
+  /** Set saving state */
+  setSaving: (isSaving: boolean) => void;
+  /** Set save error */
+  setSaveError: (error: string | null) => void;
+  /** Save current diagram to localStorage */
+  saveToLocalStorage: () => void;
+  /** Load diagram from localStorage by ID */
+  loadFromLocalStorage: (id: string) => DiagramEntry | null;
+  /** Check if there's a localStorage backup for the current diagram */
+  hasLocalBackup: () => boolean;
 }
 
 /**
@@ -100,6 +134,10 @@ const initialState: DiagramState = {
   navigationStack: [],
   isNavigating: false,
   navigationError: null,
+  isDirty: false,
+  lastSavedAt: null,
+  isSaving: false,
+  saveError: null,
 };
 
 /**
@@ -117,6 +155,9 @@ function diagramReducer(
         currentDiagram: action.payload,
         navigationStack: [],
         navigationError: null,
+        isDirty: false,
+        lastSavedAt: null,
+        saveError: null,
       };
 
     case 'NAVIGATE_TO_CHILD':
@@ -126,6 +167,8 @@ function diagramReducer(
           ...state,
           currentDiagram: action.payload,
           navigationError: null,
+          isDirty: false,
+          lastSavedAt: null,
         };
       }
       return {
@@ -134,6 +177,8 @@ function diagramReducer(
         currentDiagram: action.payload,
         isNavigating: false,
         navigationError: null,
+        isDirty: false,
+        lastSavedAt: null,
       };
 
     case 'NAVIGATE_BACK':
@@ -149,6 +194,8 @@ function diagramReducer(
         currentDiagram: previousDiagram,
         isNavigating: false,
         navigationError: null,
+        isDirty: false,
+        lastSavedAt: null,
       };
 
     case 'NAVIGATE_TO_INDEX':
@@ -171,6 +218,8 @@ function diagramReducer(
         currentDiagram: targetDiagram,
         isNavigating: false,
         navigationError: null,
+        isDirty: false,
+        lastSavedAt: null,
       };
 
     case 'UPDATE_SOURCE':
@@ -183,6 +232,7 @@ function diagramReducer(
           ...state.currentDiagram,
           source: action.payload,
         },
+        isDirty: true,
       };
 
     case 'SET_NAVIGATING':
@@ -209,6 +259,45 @@ function diagramReducer(
         currentDiagram: state.navigationStack[0],
         isNavigating: false,
         navigationError: null,
+        isDirty: false,
+        lastSavedAt: null,
+      };
+
+    case 'SET_DIRTY':
+      return {
+        ...state,
+        isDirty: action.payload,
+      };
+
+    case 'SET_SAVING':
+      return {
+        ...state,
+        isSaving: action.payload,
+      };
+
+    case 'SET_SAVE_ERROR':
+      return {
+        ...state,
+        saveError: action.payload,
+        isSaving: false,
+      };
+
+    case 'MARK_SAVED':
+      return {
+        ...state,
+        isDirty: false,
+        lastSavedAt: action.payload,
+        saveError: null,
+        isSaving: false,
+      };
+
+    case 'LOAD_FROM_STORAGE':
+      return {
+        ...state,
+        currentDiagram: action.payload.diagram,
+        lastSavedAt: action.payload.savedAt,
+        isDirty: false,
+        navigationStack: [],
       };
 
     default:
@@ -229,6 +318,8 @@ export interface DiagramProviderProps {
   children: ReactNode;
   /** Optional initial diagram */
   initialDiagram?: DiagramEntry;
+  /** Whether to persist to localStorage (default: true) */
+  persistToLocalStorage?: boolean;
 }
 
 /**
@@ -238,6 +329,8 @@ export interface DiagramProviderProps {
  * - The current diagram being viewed
  * - Navigation stack for breadcrumb/back functionality
  * - Navigation state (loading, errors)
+ * - Dirty state tracking for unsaved changes
+ * - LocalStorage persistence for offline support
  *
  * @example
  * ```tsx
@@ -249,12 +342,70 @@ export interface DiagramProviderProps {
 export function DiagramProvider({
   children,
   initialDiagram,
+  persistToLocalStorage = true,
 }: DiagramProviderProps) {
   // Initialize state with optional initial diagram
   const [state, dispatch] = useReducer(diagramReducer, {
     ...initialState,
     currentDiagram: initialDiagram ?? null,
   });
+
+  /**
+   * Save diagram to localStorage.
+   */
+  const saveToLocalStorage = useCallback(() => {
+    if (!persistToLocalStorage || !state.currentDiagram) return;
+
+    try {
+      const key = `${STORAGE_KEY_PREFIX}${state.currentDiagram.id}`;
+      const data = {
+        diagram: state.currentDiagram,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(key, JSON.stringify(data));
+
+      // Also save as current diagram
+      localStorage.setItem(CURRENT_DIAGRAM_KEY, state.currentDiagram.id);
+    } catch {
+      // localStorage might be full or unavailable
+    }
+  }, [state.currentDiagram, persistToLocalStorage]);
+
+  /**
+   * Load diagram from localStorage by ID.
+   */
+  const loadFromLocalStorage = useCallback(
+    (id: string): DiagramEntry | null => {
+      if (!persistToLocalStorage) return null;
+
+      try {
+        const key = `${STORAGE_KEY_PREFIX}${id}`;
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return parsed.diagram as DiagramEntry;
+        }
+      } catch {
+        // localStorage might be unavailable or data corrupted
+      }
+      return null;
+    },
+    [persistToLocalStorage]
+  );
+
+  /**
+   * Check if there's a localStorage backup for the current diagram.
+   */
+  const hasLocalBackup = useCallback((): boolean => {
+    if (!persistToLocalStorage || !state.currentDiagram) return false;
+
+    try {
+      const key = `${STORAGE_KEY_PREFIX}${state.currentDiagram.id}`;
+      return localStorage.getItem(key) !== null;
+    } catch {
+      return false;
+    }
+  }, [state.currentDiagram, persistToLocalStorage]);
 
   /**
    * Set the root diagram (clears navigation stack).
@@ -301,7 +452,7 @@ export function DiagramProvider({
     const breadcrumbs: BreadcrumbItem[] = [];
 
     // Add all diagrams from the navigation stack
-    state.navigationStack.forEach((diagram, index) => {
+    state.navigationStack.forEach((diagram) => {
       breadcrumbs.push({
         id: diagram.id,
         label: diagram.title,
@@ -349,6 +500,48 @@ export function DiagramProvider({
     dispatch({ type: 'RESET_NAVIGATION' });
   }, []);
 
+  /**
+   * Mark the current diagram as dirty.
+   */
+  const markDirty = useCallback(() => {
+    dispatch({ type: 'SET_DIRTY', payload: true });
+  }, []);
+
+  /**
+   * Mark the current diagram as saved.
+   */
+  const markSaved = useCallback(() => {
+    dispatch({ type: 'MARK_SAVED', payload: new Date() });
+  }, []);
+
+  /**
+   * Set saving state.
+   */
+  const setSaving = useCallback((isSaving: boolean) => {
+    dispatch({ type: 'SET_SAVING', payload: isSaving });
+  }, []);
+
+  /**
+   * Set save error.
+   */
+  const setSaveError = useCallback((error: string | null) => {
+    dispatch({ type: 'SET_SAVE_ERROR', payload: error });
+  }, []);
+
+  /**
+   * Auto-save to localStorage when dirty state changes.
+   */
+  useEffect(() => {
+    if (state.isDirty && persistToLocalStorage && state.currentDiagram) {
+      // Save to localStorage immediately when dirty
+      const timeoutId = setTimeout(() => {
+        saveToLocalStorage();
+      }, 1000); // Debounce localStorage saves by 1 second
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [state.isDirty, state.currentDiagram, persistToLocalStorage, saveToLocalStorage]);
+
   const value: DiagramContextValue = {
     state,
     setRootDiagram,
@@ -361,6 +554,13 @@ export function DiagramProvider({
     getCurrentDepth,
     clearNavigationError,
     resetNavigation,
+    markDirty,
+    markSaved,
+    setSaving,
+    setSaveError,
+    saveToLocalStorage,
+    loadFromLocalStorage,
+    hasLocalBackup,
   };
 
   return (
@@ -389,6 +589,39 @@ export function useDiagram(): DiagramContextValue {
   }
 
   return context;
+}
+
+/**
+ * Utility function to get the last opened diagram ID from localStorage.
+ *
+ * @returns The diagram ID or null if not found
+ */
+export function getLastOpenedDiagramId(): string | null {
+  try {
+    return localStorage.getItem(CURRENT_DIAGRAM_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Utility function to list all diagram IDs stored in localStorage.
+ *
+ * @returns Array of diagram IDs
+ */
+export function listStoredDiagramIds(): string[] {
+  const ids: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(STORAGE_KEY_PREFIX)) {
+        ids.push(key.slice(STORAGE_KEY_PREFIX.length));
+      }
+    }
+  } catch {
+    // localStorage might be unavailable
+  }
+  return ids;
 }
 
 export default DiagramContext;
