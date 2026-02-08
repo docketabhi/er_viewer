@@ -561,3 +561,166 @@ export function applyEntityHoverStyles(container: Element | null): void {
 
   svg.insertBefore(style, svg.firstChild);
 }
+
+/**
+ * Position information for a block badge.
+ */
+export interface BlockBadgePosition {
+  /** Entity name */
+  entityName: string;
+  /** Block directive */
+  block: BlockDirective;
+  /** X coordinate relative to container */
+  x: number;
+  /** Y coordinate relative to container */
+  y: number;
+  /** Width of the entity */
+  width: number;
+  /** Height of the entity */
+  height: number;
+}
+
+/**
+ * Badge position preference relative to entity.
+ */
+export type BadgePositionPreference =
+  | 'top-right'
+  | 'top-left'
+  | 'bottom-right'
+  | 'bottom-left';
+
+/**
+ * Calculates badge positions for all entities with blocks.
+ *
+ * This function is useful for positioning React overlay components
+ * like BlockBadge on top of the SVG.
+ *
+ * @param container - The container element with the SVG
+ * @param processedSvg - The processed SVG result
+ * @param position - Where to position badges relative to entities
+ * @param offset - Pixel offset from the position
+ * @returns Array of badge positions
+ *
+ * @example
+ * ```tsx
+ * const positions = getBlockBadgePositions(
+ *   containerRef.current,
+ *   processedSvg,
+ *   'top-right',
+ *   { x: -8, y: -8 }
+ * );
+ * ```
+ */
+export function getBlockBadgePositions(
+  container: Element | null,
+  processedSvg: ProcessedSvg,
+  position: BadgePositionPreference = 'top-right',
+  offset: { x: number; y: number } = { x: 0, y: 0 }
+): BlockBadgePosition[] {
+  const positions: BlockBadgePosition[] = [];
+
+  if (!container || !processedSvg.entityNodes) {
+    return positions;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+
+  processedSvg.entityNodes.forEach((nodeInfo, entityName) => {
+    if (!nodeInfo.hasBlock || !nodeInfo.block) {
+      return;
+    }
+
+    // Get the current bounding box of the entity
+    let bbox: DOMRect;
+    try {
+      bbox = nodeInfo.element.getBoundingClientRect();
+    } catch {
+      bbox = nodeInfo.boundingBox;
+    }
+
+    // Calculate relative position within container
+    const relativeX = bbox.x - containerRect.x;
+    const relativeY = bbox.y - containerRect.y;
+
+    // Calculate badge position based on preference
+    let x: number;
+    let y: number;
+
+    switch (position) {
+      case 'top-left':
+        x = relativeX + offset.x;
+        y = relativeY + offset.y;
+        break;
+      case 'top-right':
+        x = relativeX + bbox.width + offset.x;
+        y = relativeY + offset.y;
+        break;
+      case 'bottom-left':
+        x = relativeX + offset.x;
+        y = relativeY + bbox.height + offset.y;
+        break;
+      case 'bottom-right':
+        x = relativeX + bbox.width + offset.x;
+        y = relativeY + bbox.height + offset.y;
+        break;
+      default:
+        x = relativeX + bbox.width + offset.x;
+        y = relativeY + offset.y;
+    }
+
+    positions.push({
+      entityName,
+      block: nodeInfo.block,
+      x,
+      y,
+      width: bbox.width,
+      height: bbox.height,
+    });
+  });
+
+  return positions;
+}
+
+/**
+ * Gets the SVG element from a container.
+ *
+ * @param container - The container element
+ * @returns The SVG element or null
+ */
+export function getSvgElement(container: Element | null): SVGSVGElement | null {
+  if (!container) {
+    return null;
+  }
+  return container.querySelector('svg') as SVGSVGElement | null;
+}
+
+/**
+ * Gets the viewBox of an SVG element.
+ *
+ * @param svg - The SVG element
+ * @returns The viewBox values or null
+ */
+export function getSvgViewBox(
+  svg: SVGSVGElement | null
+): { x: number; y: number; width: number; height: number } | null {
+  if (!svg) {
+    return null;
+  }
+
+  const viewBox = svg.getAttribute('viewBox');
+  if (!viewBox) {
+    return null;
+  }
+
+  const parts = viewBox.split(/\s+/).map(Number);
+  if (parts.length !== 4 || parts.some(isNaN)) {
+    return null;
+  }
+
+  return {
+    x: parts[0],
+    y: parts[1],
+    width: parts[2],
+    height: parts[3],
+  };
+}

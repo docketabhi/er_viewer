@@ -38,12 +38,17 @@ export {
   getEntityBoundingBox,
   cleanupEntityHandlers,
   applyEntityHoverStyles,
+  getBlockBadgePositions,
+  getSvgElement,
+  getSvgViewBox,
 } from './svgProcessor';
 
 export type {
   EntityNodeInfo,
   ProcessedSvg,
   ProcessSvgOptions,
+  BlockBadgePosition,
+  BadgePositionPreference,
 } from './svgProcessor';
 
 // Type exports
