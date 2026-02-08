@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { MonacoEditor } from '@/components/Editor';
 import { MermaidPreview } from '@/components/Preview';
 import { Breadcrumb, BackButton } from '@/components/Navigation';
 import { AppLayout, PanelToggleButton } from '@/components/Layout';
+import { LeftPanel, type FileTreeNode, type RecentDiagram } from '@/components/Panels';
 import { DiagramProvider, type DiagramEntry } from '@/contexts/DiagramContext';
 import { useDiagramNavigation } from '@/hooks/useDiagramNavigation';
 import type { BlockDirective } from '@/lib/mermaid/types';
@@ -230,37 +231,93 @@ function AppHeader({
 }
 
 /**
- * Left panel placeholder component.
- * Will be replaced with LeftPanel in subtask-8-2.
+ * Mock file tree data.
+ * In production, this would come from the backend API.
  */
-function LeftPanelPlaceholder() {
-  return (
-    <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-border">
-        <h2 className="text-sm font-semibold">Files</h2>
-      </div>
-      <div className="flex-1 p-4">
-        <div className="text-sm text-muted-foreground space-y-4">
-          <div className="space-y-2">
-            <p className="font-medium text-foreground">Recent Diagrams</p>
-            <ul className="space-y-1">
-              <li className="px-2 py-1 rounded hover:bg-muted cursor-pointer">Main Diagram</li>
-              <li className="px-2 py-1 rounded hover:bg-muted cursor-pointer">Customer Flow</li>
-              <li className="px-2 py-1 rounded hover:bg-muted cursor-pointer">Order System</li>
-            </ul>
-          </div>
-          <div className="space-y-2">
-            <p className="font-medium text-foreground">Search</p>
-            <input
-              type="text"
-              placeholder="Search diagrams..."
-              className="w-full px-3 py-2 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+const MOCK_FILE_TREE_NODES: FileTreeNode[] = [
+  {
+    id: 'folder-my-diagrams',
+    name: 'My Diagrams',
+    type: 'folder',
+    children: [
+      {
+        id: 'root',
+        name: 'Main Diagram',
+        type: 'diagram',
+        metadata: { entityCount: 3 },
+      },
+      {
+        id: 'customer-details',
+        name: 'Customer Details',
+        type: 'diagram',
+        metadata: { entityCount: 4 },
+      },
+    ],
+  },
+  {
+    id: 'folder-shared',
+    name: 'Shared',
+    type: 'folder',
+    children: [
+      {
+        id: 'order-system',
+        name: 'Order System',
+        type: 'diagram',
+        metadata: { entityCount: 5 },
+      },
+    ],
+  },
+  {
+    id: 'folder-templates',
+    name: 'Templates',
+    type: 'folder',
+    children: [
+      {
+        id: 'template-basic-er',
+        name: 'Basic ER Template',
+        type: 'diagram',
+        metadata: { entityCount: 2 },
+      },
+    ],
+  },
+];
+
+/**
+ * Generate mock recent diagrams data.
+ * In production, this would come from localStorage or the backend.
+ */
+function generateMockRecentDiagrams(): RecentDiagram[] {
+  const now = new Date();
+  return [
+    {
+      id: 'root',
+      title: 'Main Diagram',
+      timestamp: new Date(now.getTime() - 5 * 60 * 1000).toISOString(), // 5 mins ago
+      entityCount: 3,
+      isDirty: false,
+    },
+    {
+      id: 'customer-details',
+      title: 'Customer Details',
+      timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+      entityCount: 4,
+      isDirty: false,
+    },
+    {
+      id: 'order-system',
+      title: 'Order System',
+      timestamp: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+      entityCount: 5,
+      isDirty: false,
+    },
+    {
+      id: 'profile-details',
+      title: 'Profile Details',
+      timestamp: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+      entityCount: 3,
+      isDirty: false,
+    },
+  ];
 }
 
 /**
@@ -430,6 +487,8 @@ function DiagramViewer() {
   const [processedSvg, setProcessedSvg] = useState<ProcessedSvg | null>(null);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
+  const [recentDiagrams, setRecentDiagrams] = useState<RecentDiagram[]>(generateMockRecentDiagrams);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Use the navigation hook
   const {
@@ -523,6 +582,100 @@ function DiagramViewer() {
     setShowRightPanel((prev) => !prev);
   }, []);
 
+  /**
+   * Handle search from left panel.
+   */
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  /**
+   * Handle diagram open from left panel.
+   */
+  const handleDiagramOpen = useCallback(
+    async (id: string, name: string) => {
+      // For "new" diagram, create a new one
+      if (id === 'new') {
+        const newDiagram: DiagramEntry = {
+          id: `diagram-${Date.now()}`,
+          title: 'New Diagram',
+          source: `erDiagram
+    ENTITY1 {
+        int id PK
+        string name
+    }
+`,
+        };
+        setDiagram(newDiagram);
+
+        // Add to recent diagrams
+        setRecentDiagrams((prev) => [
+          {
+            id: newDiagram.id,
+            title: newDiagram.title,
+            timestamp: new Date().toISOString(),
+            entityCount: 1,
+            isDirty: true,
+          },
+          ...prev.filter((d) => d.id !== newDiagram.id).slice(0, 9),
+        ]);
+        return;
+      }
+
+      // Check if it's the root diagram
+      if (id === 'root') {
+        setDiagram(DEFAULT_ROOT_DIAGRAM);
+      } else {
+        // Try to fetch from the mock API
+        const childDiagram = await fetchChildDiagram(id);
+        if (childDiagram) {
+          setDiagram(childDiagram);
+        }
+      }
+
+      // Update recent diagrams
+      setRecentDiagrams((prev) => {
+        const existing = prev.find((d) => d.id === id);
+        if (existing) {
+          // Move to top
+          return [
+            { ...existing, timestamp: new Date().toISOString() },
+            ...prev.filter((d) => d.id !== id),
+          ];
+        }
+        // Add new entry
+        return [
+          {
+            id,
+            title: name,
+            timestamp: new Date().toISOString(),
+          },
+          ...prev.slice(0, 9),
+        ];
+      });
+    },
+    [setDiagram]
+  );
+
+  /**
+   * Handle removing a diagram from recent list.
+   */
+  const handleRemoveRecent = useCallback((id: string) => {
+    setRecentDiagrams((prev) => prev.filter((d) => d.id !== id));
+  }, []);
+
+  /**
+   * Handle clearing all recent diagrams.
+   */
+  const handleClearRecent = useCallback(() => {
+    setRecentDiagrams([]);
+  }, []);
+
+  /**
+   * Memoize file tree nodes to avoid unnecessary re-renders.
+   */
+  const fileTreeNodes = useMemo(() => MOCK_FILE_TREE_NODES, []);
+
   // Loading state during navigation
   if (isNavigating) {
     return (
@@ -552,7 +705,19 @@ function DiagramViewer() {
           onToggleRightPanel={toggleRightPanel}
         />
       }
-      leftPanel={<LeftPanelPlaceholder />}
+      leftPanel={
+        <LeftPanel
+          fileTreeNodes={fileTreeNodes}
+          recentDiagrams={recentDiagrams}
+          activeId={currentDiagram?.id}
+          selectedId={currentDiagram?.id}
+          onSearch={handleSearch}
+          onOpen={handleDiagramOpen}
+          onRemoveRecent={handleRemoveRecent}
+          onClearRecent={handleClearRecent}
+          defaultExpandedIds={['folder-my-diagrams']}
+        />
+      }
       centerPanel={
         <CenterPanel
           currentDiagram={currentDiagram}
