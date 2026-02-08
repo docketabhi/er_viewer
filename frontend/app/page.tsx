@@ -13,11 +13,12 @@ import {
   type DiagramVersion,
   type DiagramSettings,
 } from '@/components/Panels';
+import { EntityContextMenu } from '@/components/ContextMenu';
 import { DiagramProvider, type DiagramEntry } from '@/contexts/DiagramContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useDiagramNavigation } from '@/hooks/useDiagramNavigation';
+import { useDiagramNavigation, useContextMenu } from '@/hooks';
 import type { BlockDirective } from '@/lib/mermaid/types';
-import type { ProcessedSvg } from '@/lib/mermaid/svgProcessor';
+import type { ProcessedSvg, EntityNodeInfo } from '@/lib/mermaid/svgProcessor';
 import type { MermaidTheme } from '@/lib/mermaid/config';
 
 /**
@@ -358,6 +359,7 @@ function CenterPanel({
   onRenderSuccess,
   onRenderError,
   onBlockClick,
+  onEntityContextMenu,
   onSvgProcessed,
 }: {
   currentDiagram: DiagramEntry | null;
@@ -369,6 +371,7 @@ function CenterPanel({
   onRenderSuccess: () => void;
   onRenderError: (error: Error) => void;
   onBlockClick: (block: BlockDirective, event: MouseEvent) => void;
+  onEntityContextMenu: (entityName: string, event: MouseEvent) => void;
   onSvgProcessed: (processed: ProcessedSvg) => void;
 }) {
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -409,6 +412,7 @@ function CenterPanel({
             onRenderSuccess={onRenderSuccess}
             onRenderError={onRenderError}
             onBlockClick={onBlockClick}
+            onEntityContextMenu={onEntityContextMenu}
             onSvgProcessed={onSvgProcessed}
             showBlockIndicators
           />
@@ -444,6 +448,17 @@ function DiagramViewer() {
     previewDebounce: 300,
     showBlockIndicators: true,
   });
+
+  // Context menu state for entity right-click
+  interface ContextMenuTarget {
+    entityName: string;
+    entityInfo: EntityNodeInfo | null;
+  }
+  const {
+    state: contextMenuState,
+    openMenu: openContextMenu,
+    closeMenu: closeContextMenu,
+  } = useContextMenu<ContextMenuTarget>();
 
   // Use the navigation hook
   const {
@@ -525,6 +540,118 @@ function DiagramViewer() {
   const handleSvgProcessed = useCallback((processed: ProcessedSvg) => {
     setProcessedSvg(processed);
   }, []);
+
+  /**
+   * Handle entity right-click to open context menu.
+   */
+  const handleEntityContextMenu = useCallback(
+    (entityName: string, event: MouseEvent) => {
+      const entityInfo = processedSvg?.entityNodes.get(entityName) ?? null;
+      openContextMenu(event, { entityName, entityInfo });
+    },
+    [openContextMenu, processedSvg]
+  );
+
+  /**
+   * Handle "Link to subdiagram" from context menu.
+   * Opens a dialog/modal to select an existing diagram to link to.
+   */
+  const handleLinkToSubdiagram = useCallback(
+    (entityName: string) => {
+      // For now, we'll add a placeholder block directive to the source
+      // In a real app, this would open a diagram picker dialog
+      const blockDirective = `%%block: ${entityName} -> diagramId=new-${entityName.toLowerCase()}-diagram label="${entityName} Details"`;
+      const newSource = currentSource + '\n' + blockDirective;
+      setSource(newSource);
+      closeContextMenu();
+    },
+    [currentSource, setSource, closeContextMenu]
+  );
+
+  /**
+   * Handle "Create subdiagram" from context menu.
+   * Creates a new child diagram with a skeleton structure.
+   */
+  const handleCreateSubdiagram = useCallback(
+    (entityName: string) => {
+      // Generate a new diagram ID
+      const newDiagramId = `${entityName.toLowerCase()}-details-${Date.now()}`;
+
+      // Add block directive to current source
+      const blockDirective = `%%block: ${entityName} -> diagramId=${newDiagramId} label="${entityName} Details"`;
+      const newSource = currentSource + '\n' + blockDirective;
+      setSource(newSource);
+
+      // In a real app, this would also create the child diagram in the database
+      // For now, we just add the directive
+      closeContextMenu();
+    },
+    [currentSource, setSource, closeContextMenu]
+  );
+
+  /**
+   * Handle "Go to subdiagram" from context menu.
+   */
+  const handleGoToSubdiagram = useCallback(
+    (block: BlockDirective) => {
+      closeContextMenu();
+      handleBlockClick(block, new MouseEvent('click'));
+    },
+    [handleBlockClick, closeContextMenu]
+  );
+
+  /**
+   * Handle "Edit block" from context menu.
+   */
+  const handleEditBlock = useCallback(
+    (entityName: string, block: BlockDirective) => {
+      // In a real app, this would open a dialog to edit the block
+      // For now, we just log it
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
+
+  /**
+   * Handle "Remove block" from context menu.
+   */
+  const handleRemoveBlock = useCallback(
+    (entityName: string, block: BlockDirective) => {
+      // Remove the block directive from source
+      const lines = currentSource.split('\n');
+      const filteredLines = lines.filter((line) => {
+        // Check if line is a block directive for this entity
+        const isBlockDirective = line.trim().startsWith('%%block:');
+        const isForEntity = line.includes(`%%block: ${entityName}`) || line.includes(`%%block:${entityName}`);
+        return !(isBlockDirective && isForEntity);
+      });
+      setSource(filteredLines.join('\n'));
+      closeContextMenu();
+    },
+    [currentSource, setSource, closeContextMenu]
+  );
+
+  /**
+   * Handle "Copy entity name" from context menu.
+   */
+  const handleCopyEntityName = useCallback(
+    async (entityName: string) => {
+      try {
+        await navigator.clipboard.writeText(entityName);
+        // Could show a toast notification here
+      } catch (err) {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = entityName;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      closeContextMenu();
+    },
+    [closeContextMenu]
+  );
 
   /**
    * Toggle panel visibility.
@@ -706,68 +833,94 @@ function DiagramViewer() {
     );
   }
 
+  // Get entity info for context menu
+  const contextMenuEntityName = contextMenuState.targetData?.entityName ?? '';
+  const contextMenuEntityInfo = contextMenuState.targetData?.entityInfo ?? null;
+  const hasExistingBlock = contextMenuEntityInfo?.hasBlock ?? false;
+  const contextMenuBlock = contextMenuEntityInfo?.block;
+
   return (
-    <AppLayout
-      header={
-        <AppHeader
-          currentDiagram={currentDiagram}
-          renderError={renderError}
-          depth={depth}
-          canGoBack={canGoBack}
-          goBack={goBack}
-          breadcrumbs={breadcrumbs}
-          onBreadcrumbClick={handleBreadcrumbClick}
-          showLeftPanel={showLeftPanel}
-          showRightPanel={showRightPanel}
-          onToggleLeftPanel={toggleLeftPanel}
-          onToggleRightPanel={toggleRightPanel}
-        />
-      }
-      leftPanel={
-        <LeftPanel
-          fileTreeNodes={fileTreeNodes}
-          recentDiagrams={recentDiagrams}
-          activeId={currentDiagram?.id}
-          selectedId={currentDiagram?.id}
-          onSearch={handleSearch}
-          onOpen={handleDiagramOpen}
-          onRemoveRecent={handleRemoveRecent}
-          onClearRecent={handleClearRecent}
-          defaultExpandedIds={['folder-my-diagrams']}
-        />
-      }
-      centerPanel={
-        <CenterPanel
-          currentDiagram={currentDiagram}
-          currentSource={currentSource}
-          processedSvg={processedSvg}
-          mermaidTheme={settings.mermaidTheme}
-          isDarkMode={isDarkMode}
-          onEditorChange={handleEditorChange}
-          onRenderSuccess={handleRenderSuccess}
-          onRenderError={handleRenderError}
-          onBlockClick={handlePreviewBlockClick}
-          onSvgProcessed={handleSvgProcessed}
-        />
-      }
-      rightPanel={
-        <RightPanel
-          diagramId={currentDiagram?.id}
-          versions={versions}
-          settings={settings}
-          onInsertSnippet={handleInsertSnippet}
-          onCreateSnapshot={handleCreateSnapshot}
-          onRestoreVersion={handleRestoreVersion}
-          onSelectVersion={handleSelectVersion}
-          onSettingsChange={handleSettingsChange}
-        />
-      }
-      footer={<AppFooter depth={depth} />}
-      showLeftPanel={showLeftPanel}
-      showRightPanel={showRightPanel}
-      onLeftPanelToggle={setShowLeftPanel}
-      onRightPanelToggle={setShowRightPanel}
-    />
+    <>
+      <AppLayout
+        header={
+          <AppHeader
+            currentDiagram={currentDiagram}
+            renderError={renderError}
+            depth={depth}
+            canGoBack={canGoBack}
+            goBack={goBack}
+            breadcrumbs={breadcrumbs}
+            onBreadcrumbClick={handleBreadcrumbClick}
+            showLeftPanel={showLeftPanel}
+            showRightPanel={showRightPanel}
+            onToggleLeftPanel={toggleLeftPanel}
+            onToggleRightPanel={toggleRightPanel}
+          />
+        }
+        leftPanel={
+          <LeftPanel
+            fileTreeNodes={fileTreeNodes}
+            recentDiagrams={recentDiagrams}
+            activeId={currentDiagram?.id}
+            selectedId={currentDiagram?.id}
+            onSearch={handleSearch}
+            onOpen={handleDiagramOpen}
+            onRemoveRecent={handleRemoveRecent}
+            onClearRecent={handleClearRecent}
+            defaultExpandedIds={['folder-my-diagrams']}
+          />
+        }
+        centerPanel={
+          <CenterPanel
+            currentDiagram={currentDiagram}
+            currentSource={currentSource}
+            processedSvg={processedSvg}
+            mermaidTheme={settings.mermaidTheme}
+            isDarkMode={isDarkMode}
+            onEditorChange={handleEditorChange}
+            onRenderSuccess={handleRenderSuccess}
+            onRenderError={handleRenderError}
+            onBlockClick={handlePreviewBlockClick}
+            onEntityContextMenu={handleEntityContextMenu}
+            onSvgProcessed={handleSvgProcessed}
+          />
+        }
+        rightPanel={
+          <RightPanel
+            diagramId={currentDiagram?.id}
+            versions={versions}
+            settings={settings}
+            onInsertSnippet={handleInsertSnippet}
+            onCreateSnapshot={handleCreateSnapshot}
+            onRestoreVersion={handleRestoreVersion}
+            onSelectVersion={handleSelectVersion}
+            onSettingsChange={handleSettingsChange}
+          />
+        }
+        footer={<AppFooter depth={depth} />}
+        showLeftPanel={showLeftPanel}
+        showRightPanel={showRightPanel}
+        onLeftPanelToggle={setShowLeftPanel}
+        onRightPanelToggle={setShowRightPanel}
+      />
+
+      {/* Entity context menu for right-click actions */}
+      <EntityContextMenu
+        isOpen={contextMenuState.isOpen}
+        x={contextMenuState.position.x}
+        y={contextMenuState.position.y}
+        entityName={contextMenuEntityName}
+        block={contextMenuBlock}
+        hasExistingBlock={hasExistingBlock}
+        onClose={closeContextMenu}
+        onLinkToSubdiagram={handleLinkToSubdiagram}
+        onCreateSubdiagram={handleCreateSubdiagram}
+        onGoToSubdiagram={handleGoToSubdiagram}
+        onEditBlock={handleEditBlock}
+        onRemoveBlock={handleRemoveBlock}
+        onCopyEntityName={handleCopyEntityName}
+      />
+    </>
   );
 }
 

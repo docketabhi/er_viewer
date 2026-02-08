@@ -24,3 +24,12 @@ export {
   type KeyboardShortcut,
   type UseKeyboardShortcutOptions,
 } from './useKeyboardShortcut';
+export {
+  useContextMenu,
+  shouldFlipMenu,
+  getViewportSafeArea,
+  type ContextMenuPosition,
+  type ContextMenuState,
+  type UseContextMenuOptions,
+  type UseContextMenuResult,
+} from './useContextMenu';
