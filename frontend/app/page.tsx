@@ -1106,10 +1106,11 @@ function DiagramViewer() {
         createdAt: new Date(),
         createdBy: 'Current User',
         isAutoSave: false,
+        mermaidSource: currentSource, // Save the current source content
       };
       setVersions((prev) => [newVersion, ...prev]);
     },
-    [currentDiagram]
+    [currentDiagram, currentSource]
   );
 
   /**
@@ -1117,14 +1118,24 @@ function DiagramViewer() {
    */
   const handleRestoreVersion = useCallback(
     (versionId: string) => {
-      // In a real app, this would fetch the version content from the API
-      // For now, we just log it
       const version = versions.find((v) => v.id === versionId);
-      if (version) {
-        // Mock restore - in production this would restore actual content
+      if (version && version.mermaidSource) {
+        // Restore the diagram source to the version's content
+        setSource(version.mermaidSource);
+
+        // Create an auto-save of current state before restore
+        const autoSaveVersion: DiagramVersion = {
+          id: `auto-save-before-restore-${Date.now()}`,
+          label: 'Auto-save before restore',
+          createdAt: new Date(),
+          createdBy: 'Auto-save',
+          isAutoSave: true,
+          mermaidSource: currentSource, // Save the current source before restoring
+        };
+        setVersions((prev) => [autoSaveVersion, ...prev]);
       }
     },
-    [versions]
+    [versions, currentSource, setSource]
   );
 
   /**
@@ -1218,6 +1229,7 @@ function DiagramViewer() {
             diagramId={currentDiagram?.id}
             versions={versions}
             settings={settings}
+            currentSource={currentSource}
             onInsertSnippet={handleInsertSnippet}
             onCreateSnapshot={handleCreateSnapshot}
             onRestoreVersion={handleRestoreVersion}

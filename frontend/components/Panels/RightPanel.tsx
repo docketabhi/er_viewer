@@ -137,6 +137,8 @@ export interface RightPanelProps {
   currentUserId?: string;
   /** Active version ID for history */
   activeVersionId?: string;
+  /** Current source content for diff comparison in version preview */
+  currentSource?: string;
   /** Callback when a snippet is inserted */
   onInsertSnippet?: (snippet: string) => void;
   /** Callback when a comment is added */
@@ -245,6 +247,7 @@ export const RightPanel = memo(function RightPanel({
   settings,
   currentUserId,
   activeVersionId,
+  currentSource,
   onInsertSnippet,
   onAddComment,
   onDeleteComment,
@@ -378,6 +381,7 @@ export const RightPanel = memo(function RightPanel({
             diagramId={diagramId}
             versions={versions}
             activeVersionId={activeVersionId}
+            currentSource={currentSource}
             onSelectVersion={handleSelectVersion}
             onRestoreVersion={handleRestoreVersion}
             onCreateSnapshot={handleCreateSnapshot}

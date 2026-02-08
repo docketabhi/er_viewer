@@ -17,3 +17,8 @@ export {
   groupVersionsByDate,
   type VersionTimelineProps,
 } from './VersionTimeline';
+
+export {
+  VersionPreview,
+  type VersionPreviewProps,
+} from './VersionPreview';

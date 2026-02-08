@@ -4,8 +4,10 @@ import {
   memo,
   useMemo,
   useCallback,
+  useState,
 } from 'react';
 import { VersionItem, formatDateTime, type DiagramVersion } from './VersionItem';
+import { VersionPreview } from './VersionPreview';
 
 /**
  * Props for the VersionTimeline component.
@@ -27,6 +29,10 @@ export interface VersionTimelineProps {
   showDateGroups?: boolean;
   /** Maximum number of versions to display (0 = unlimited) */
   maxVersions?: number;
+  /** Current source for diff comparison in preview */
+  currentSource?: string;
+  /** Whether to enable the preview modal (default: true) */
+  enablePreview?: boolean;
   /** Additional CSS class */
   className?: string;
 }
@@ -161,8 +167,14 @@ export const VersionTimeline = memo(function VersionTimeline({
   restoringVersionId,
   showDateGroups = true,
   maxVersions = 0,
+  currentSource,
+  enablePreview = true,
   className = '',
 }: VersionTimelineProps) {
+  // Preview state
+  const [previewVersion, setPreviewVersion] = useState<DiagramVersion | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
   // Limit versions if maxVersions is set
   const displayedVersions = useMemo(() => {
     if (maxVersions > 0 && versions.length > maxVersions) {
@@ -178,24 +190,58 @@ export const VersionTimeline = memo(function VersionTimeline({
   );
 
   /**
-   * Handle version selection.
+   * Handle version selection - opens preview if enabled.
    */
   const handleSelectVersion = useCallback(
     (version: DiagramVersion) => {
+      // Call the external handler first
       onSelectVersion(version);
+
+      // If preview is enabled and version has source, show preview
+      if (enablePreview && version.mermaidSource) {
+        setPreviewVersion(version);
+        setIsPreviewOpen(true);
+      }
     },
-    [onSelectVersion]
+    [onSelectVersion, enablePreview]
   );
 
   /**
-   * Handle version restore.
+   * Handle version restore from timeline item.
    */
   const handleRestoreVersion = useCallback(
     (version: DiagramVersion) => {
+      // If preview is enabled and version has source, show preview first
+      if (enablePreview && version.mermaidSource) {
+        setPreviewVersion(version);
+        setIsPreviewOpen(true);
+      } else {
+        // Otherwise, restore directly
+        onRestoreVersion(version);
+      }
+    },
+    [onRestoreVersion, enablePreview]
+  );
+
+  /**
+   * Handle restore from preview modal.
+   */
+  const handlePreviewRestore = useCallback(
+    (version: DiagramVersion) => {
       onRestoreVersion(version);
+      setIsPreviewOpen(false);
+      setPreviewVersion(null);
     },
     [onRestoreVersion]
   );
+
+  /**
+   * Handle preview close.
+   */
+  const handlePreviewClose = useCallback(() => {
+    setIsPreviewOpen(false);
+    setPreviewVersion(null);
+  }, []);
 
   /**
    * Handle version delete.
@@ -216,44 +262,58 @@ export const VersionTimeline = memo(function VersionTimeline({
   const dateGroups = Array.from(groupedVersions.entries());
 
   return (
-    <div
-      className={`version-timeline ${className}`}
-      role="listbox"
-      aria-label="Version history"
-    >
-      {dateGroups.map(([date, dateVersions], groupIndex) => (
-        <div key={date} className="mb-4 last:mb-0">
-          {/* Date header */}
-          {showDateGroups && (
-            <DateGroupHeader date={date} count={dateVersions.length} />
-          )}
+    <>
+      <div
+        className={`version-timeline ${className}`}
+        role="listbox"
+        aria-label="Version history"
+      >
+        {dateGroups.map(([date, dateVersions], groupIndex) => (
+          <div key={date} className="mb-4 last:mb-0">
+            {/* Date header */}
+            {showDateGroups && (
+              <DateGroupHeader date={date} count={dateVersions.length} />
+            )}
 
-          {/* Timeline container */}
-          <div className="relative border-l-2 border-border ml-1.5">
-            {dateVersions.map((version, versionIndex) => (
-              <VersionItem
-                key={version.id}
-                version={version}
-                isActive={version.id === activeVersionId}
-                onSelect={handleSelectVersion}
-                onRestore={handleRestoreVersion}
-                onDelete={onDeleteVersion ? handleDeleteVersion : undefined}
-                isRestoring={version.id === restoringVersionId}
-              />
-            ))}
+            {/* Timeline container */}
+            <div className="relative border-l-2 border-border ml-1.5">
+              {dateVersions.map((version, versionIndex) => (
+                <VersionItem
+                  key={version.id}
+                  version={version}
+                  isActive={version.id === activeVersionId}
+                  onSelect={handleSelectVersion}
+                  onRestore={handleRestoreVersion}
+                  onDelete={onDeleteVersion ? handleDeleteVersion : undefined}
+                  isRestoring={version.id === restoringVersionId}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
 
-      {/* Show more indicator */}
-      {maxVersions > 0 && versions.length > maxVersions && (
-        <div className="text-center py-2">
-          <span className="text-xs text-muted-foreground">
-            + {versions.length - maxVersions} more versions
-          </span>
-        </div>
+        {/* Show more indicator */}
+        {maxVersions > 0 && versions.length > maxVersions && (
+          <div className="text-center py-2">
+            <span className="text-xs text-muted-foreground">
+              + {versions.length - maxVersions} more versions
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Version preview modal */}
+      {enablePreview && (
+        <VersionPreview
+          version={previewVersion}
+          currentSource={currentSource}
+          isOpen={isPreviewOpen}
+          onClose={handlePreviewClose}
+          onRestore={handlePreviewRestore}
+          isRestoring={restoringVersionId === previewVersion?.id}
+        />
       )}
-    </div>
+    </>
   );
 });
 

@@ -33,6 +33,10 @@ export interface HistoryTabProps {
   isLoading?: boolean;
   /** ID of version currently being restored */
   restoringVersionId?: string;
+  /** Current source content for diff comparison in preview */
+  currentSource?: string;
+  /** Whether to enable the preview modal (default: true) */
+  enablePreview?: boolean;
   /** Additional CSS class */
   className?: string;
 }
@@ -202,6 +206,8 @@ export const HistoryTab = memo(function HistoryTab({
   onCreateSnapshot,
   isLoading = false,
   restoringVersionId,
+  currentSource,
+  enablePreview = true,
   className = '',
 }: HistoryTabProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -309,6 +315,8 @@ export const HistoryTab = memo(function HistoryTab({
               onRestoreVersion={handleRestoreVersion}
               onDeleteVersion={onDeleteVersion ? handleDeleteVersion : undefined}
               restoringVersionId={restoringVersionId}
+              currentSource={currentSource}
+              enablePreview={enablePreview}
               showDateGroups
             />
           </div>
