@@ -3,6 +3,8 @@
  *
  * Business logic for diagram CRUD operations.
  * Uses Drizzle ORM for database operations.
+ *
+ * Note: Version history/snapshots are handled by VersionsService.
  */
 
 import { Injectable, NotFoundException } from '@nestjs/common';

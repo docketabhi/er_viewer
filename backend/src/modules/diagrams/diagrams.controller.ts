@@ -1,7 +1,7 @@
 /**
  * Diagrams Controller
  *
- * REST API endpoints for diagram CRUD operations.
+ * REST API endpoints for diagram and version CRUD operations.
  * Follows RESTful conventions with proper HTTP methods and status codes.
  */
 
@@ -19,13 +19,18 @@ import {
   Query,
 } from '@nestjs/common';
 import { DiagramsService } from './diagrams.service';
+import { VersionsService } from './versions.service';
 import { CreateDiagramDto } from './dto/create-diagram.dto';
 import { UpdateDiagramDto } from './dto/update-diagram.dto';
-import { Diagram } from '../../db';
+import { CreateVersionDto } from './dto/create-version.dto';
+import { Diagram, DiagramVersion } from '../../db';
 
 @Controller('diagrams')
 export class DiagramsController {
-  constructor(private readonly diagramsService: DiagramsService) {}
+  constructor(
+    private readonly diagramsService: DiagramsService,
+    private readonly versionsService: VersionsService,
+  ) {}
 
   /**
    * Create a new diagram
@@ -89,5 +94,71 @@ export class DiagramsController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ): Promise<{ deleted: boolean; id: string }> {
     return this.diagramsService.remove(id);
+  }
+
+  // =====================
+  // VERSION ENDPOINTS
+  // =====================
+
+  /**
+   * Create a new version snapshot of a diagram
+   * POST /diagrams/:id/versions
+   */
+  @Post(':id/versions')
+  @HttpCode(HttpStatus.CREATED)
+  async createVersion(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() createVersionDto: CreateVersionDto,
+  ): Promise<DiagramVersion> {
+    return this.versionsService.create(id, createVersionDto);
+  }
+
+  /**
+   * Get all versions for a diagram
+   * GET /diagrams/:id/versions
+   */
+  @Get(':id/versions')
+  async findAllVersions(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<DiagramVersion[]> {
+    return this.versionsService.findAllByDiagram(id);
+  }
+
+  /**
+   * Get a specific version by ID
+   * GET /diagrams/:id/versions/:versionId
+   */
+  @Get(':id/versions/:versionId')
+  async findOneVersion(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string,
+  ): Promise<DiagramVersion> {
+    return this.versionsService.findOneByDiagram(id, versionId);
+  }
+
+  /**
+   * Restore a diagram to a previous version
+   * POST /diagrams/:id/versions/:versionId/restore
+   */
+  @Post(':id/versions/:versionId/restore')
+  @HttpCode(HttpStatus.OK)
+  async restoreVersion(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string,
+  ): Promise<Diagram> {
+    return this.versionsService.restore(id, versionId);
+  }
+
+  /**
+   * Delete a specific version
+   * DELETE /diagrams/:id/versions/:versionId
+   */
+  @Delete(':id/versions/:versionId')
+  @HttpCode(HttpStatus.OK)
+  async removeVersion(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('versionId', new ParseUUIDPipe({ version: '4' })) versionId: string,
+  ): Promise<{ deleted: boolean; id: string }> {
+    return this.versionsService.remove(id, versionId);
   }
 }
