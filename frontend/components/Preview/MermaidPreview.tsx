@@ -14,7 +14,9 @@ import {
   cleanupEntityHandlers,
 } from '@/lib/mermaid/svgProcessor';
 import { useDebounce } from '@/hooks/useDebounce';
+import { usePanZoom, type Transform } from '@/hooks/usePanZoom';
 import { ErrorDisplay } from './ErrorDisplay';
+import { CanvasControls } from './CanvasControls';
 
 /** Default debounce delay for preview updates in milliseconds */
 const PREVIEW_DEBOUNCE_MS = 300;
@@ -47,6 +49,20 @@ export interface MermaidPreviewProps {
   onSvgProcessed?: (processedSvg: ProcessedSvg) => void;
   /** Whether to add visual indicators for entities with blocks */
   showBlockIndicators?: boolean;
+  /** Whether to enable pan and zoom controls (default: true) */
+  enablePanZoom?: boolean;
+  /** Whether to show canvas controls for zoom (default: true) */
+  showControls?: boolean;
+  /** Position of the canvas controls */
+  controlsPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  /** Callback fired when transform changes */
+  onTransformChange?: (transform: Transform) => void;
+  /** Initial transform state */
+  initialTransform?: Partial<Transform>;
+  /** Minimum zoom scale (default: 0.1) */
+  minScale?: number;
+  /** Maximum zoom scale (default: 5) */
+  maxScale?: number;
   /** Additional CSS class for the container */
   className?: string;
 }
@@ -91,6 +107,13 @@ export function MermaidPreview({
   onEntityMouseLeave,
   onSvgProcessed,
   showBlockIndicators = true,
+  enablePanZoom = true,
+  showControls = true,
+  controlsPosition = 'bottom-right',
+  onTransformChange,
+  initialTransform,
+  minScale = 0.1,
+  maxScale = 5,
   className = '',
 }: MermaidPreviewProps) {
   // Generate a unique ID for this component instance
@@ -102,7 +125,37 @@ export function MermaidPreview({
 
   // Refs for DOM access
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgContainerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const mermaidRef = useRef<typeof import('mermaid') | null>(null);
+
+  // Pan and zoom state
+  const {
+    transform,
+    isPanning,
+    zoomIn,
+    zoomOut,
+    reset,
+    fitToContainer,
+    handleWheel,
+    handleMouseDown,
+    transformStyle,
+    bindToContainer,
+  } = usePanZoom({
+    minScale,
+    maxScale,
+    initialTransform,
+    enablePan: enablePanZoom,
+    enableZoom: enablePanZoom,
+    onTransformChange,
+  });
+
+  // Bind pan/zoom to wrapper container
+  useEffect(() => {
+    if (wrapperRef.current) {
+      bindToContainer(wrapperRef);
+    }
+  }, [bindToContainer]);
 
   // Render state
   const [renderState, setRenderState] = useState<RenderState>({
@@ -290,15 +343,69 @@ export function MermaidPreview({
     );
   }
 
+  // Handle wheel event for zooming
+  const onWheel = useCallback(
+    (event: React.WheelEvent) => {
+      if (enablePanZoom) {
+        handleWheel(event);
+      }
+    },
+    [enablePanZoom, handleWheel]
+  );
+
+  // Handle mouse down for panning
+  const onMouseDown = useCallback(
+    (event: React.MouseEvent) => {
+      if (enablePanZoom) {
+        handleMouseDown(event);
+      }
+    },
+    [enablePanZoom, handleMouseDown]
+  );
+
   // Render success state with SVG
   return (
     <div
       id={containerId}
-      ref={containerRef}
-      className={`mermaid-preview flex items-center justify-center h-full p-4 overflow-auto bg-background ${className}`}
-      // Set SVG directly in case containerRef wasn't updated
-      dangerouslySetInnerHTML={{ __html: renderState.svg }}
-    />
+      ref={wrapperRef}
+      className={`mermaid-preview relative h-full overflow-hidden bg-background ${className}`}
+      onWheel={onWheel}
+      onMouseDown={onMouseDown}
+      style={{ cursor: isPanning ? 'grabbing' : enablePanZoom ? 'grab' : 'default' }}
+    >
+      {/* Transformable SVG container */}
+      <div
+        ref={svgContainerRef}
+        className="flex items-center justify-center w-full h-full p-4"
+        style={{
+          transform: enablePanZoom ? transformStyle : undefined,
+          transformOrigin: '0 0',
+          transition: isPanning ? 'none' : 'transform 0.1s ease-out',
+        }}
+      >
+        {/* SVG content container */}
+        <div
+          ref={containerRef}
+          className="mermaid-svg-content"
+          dangerouslySetInnerHTML={{ __html: renderState.svg }}
+        />
+      </div>
+
+      {/* Canvas controls for zoom */}
+      {enablePanZoom && showControls && (
+        <CanvasControls
+          scale={transform.scale}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          onReset={reset}
+          onFitToContainer={fitToContainer}
+          minScale={minScale}
+          maxScale={maxScale}
+          position={controlsPosition}
+          showScale
+        />
+      )}
+    </div>
   );
 }
 

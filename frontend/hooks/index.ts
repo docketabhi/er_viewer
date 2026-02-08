@@ -10,3 +10,9 @@ export {
   type NavigationOptions,
   type DiagramNavigationResult,
 } from './useDiagramNavigation';
+export {
+  usePanZoom,
+  type Transform,
+  type UsePanZoomOptions,
+  type UsePanZoomResult,
+} from './usePanZoom';
