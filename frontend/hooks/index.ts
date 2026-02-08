@@ -16,3 +16,11 @@ export {
   type UsePanZoomOptions,
   type UsePanZoomResult,
 } from './usePanZoom';
+export {
+  useKeyboardShortcut,
+  useKeyboardShortcuts,
+  formatShortcut,
+  type KeyboardModifiers,
+  type KeyboardShortcut,
+  type UseKeyboardShortcutOptions,
+} from './useKeyboardShortcut';

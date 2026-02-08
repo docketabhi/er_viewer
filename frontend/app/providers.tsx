@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { DiagramProvider } from '@/contexts/DiagramContext';
+import { GlobalCommandPalette } from '@/components/CommandPalette';
 
 /**
  * Props for the Providers component.
@@ -17,6 +18,7 @@ interface ProvidersProps {
  * This component is a client component that provides:
  * - ThemeProvider for light/dark mode management
  * - DiagramProvider for diagram state and navigation
+ * - GlobalCommandPalette for Cmd+Shift+P command launcher
  *
  * @example
  * ```tsx
@@ -39,6 +41,7 @@ export function Providers({ children }: ProvidersProps) {
     <ThemeProvider defaultTheme="system" persist>
       <DiagramProvider>
         {children}
+        <GlobalCommandPalette />
       </DiagramProvider>
     </ThemeProvider>
   );
